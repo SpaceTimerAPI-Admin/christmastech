@@ -13,7 +13,10 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const siteBaseUrl = process.env.SITE_BASE_URL || 'https://swoems.com';
 
 async function sendToGroupMe(text) {
-  if (!groupmeBotId) return;
+  if (!groupmeBotId) {
+    console.warn('GROUPME_BOT_ID not set; skipping GroupMe post.');
+    return;
+  }
 
   try {
     const res = await fetch(groupmePostUrl, {
@@ -33,9 +36,6 @@ async function sendToGroupMe(text) {
   }
 }
 
-//
-// Build the same 5pm message used in dailyReport.js
-//
 async function buildReportMessage() {
   if (!supabaseUrl || !supabaseServiceKey) {
     return '⚠️ Supabase environment variables not configured.';
@@ -61,7 +61,7 @@ async function buildReportMessage() {
   } else {
     text += `🎄 Open Light Issues (Manual Report)\n\n`;
 
-    tickets.forEach(t => {
+    tickets.forEach((t) => {
       const link = `${siteBaseUrl}/ticket.html?id=${t.id}`;
       text += `#${t.id} – ${t.location_friendly}\n${link}\n\n`;
     });
@@ -74,6 +74,7 @@ async function buildReportMessage() {
 }
 
 exports.handler = async (event) => {
+  // GroupMe always POSTs here, but allow GET to just say "ok"
   if (event.httpMethod !== 'POST') {
     return { statusCode: 200, body: 'ok' };
   }
@@ -89,7 +90,7 @@ exports.handler = async (event) => {
   const senderType = body.sender_type;
   const rawText = (body.text || '').trim().toLowerCase();
 
-  // Ignore messages from bots
+  // Ignore messages from bots (including this bot)
   if (senderType === 'bot') {
     return { statusCode: 200, body: 'ok' };
   }
@@ -106,7 +107,9 @@ exports.handler = async (event) => {
 
   // /list tickets → dashboard link
   if (rawText === '/list tickets') {
-    await sendToGroupMe(`📋 Lights ticket dashboard:\n${siteBaseUrl}/dashboard.html`);
+    await sendToGroupMe(
+      `📋 Lights ticket dashboard:\n${siteBaseUrl}/dashboard.html`
+    );
     return { statusCode: 200, body: 'ok' };
   }
 
@@ -122,3 +125,6 @@ exports.handler = async (event) => {
     await sendToGroupMe('Bot is live');
     return { statusCode: 200, body: 'ok' };
   }
+
+  return { statusCode: 200, body: 'ok' };
+};
