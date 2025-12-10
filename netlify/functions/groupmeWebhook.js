@@ -117,5 +117,8 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: 'ok' };
   }
 
-  return { statusCode: 200, body: 'ok' };
-};
+  // /test → simple health check
+  if (rawText === '/test') {
+    await sendToGroupMe('Bot is live');
+    return { statusCode: 200, body: 'ok' };
+  }
