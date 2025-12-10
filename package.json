@@ -1,0 +1,14 @@
+{
+  "name": "christmas-lights-ticket-bot",
+  "version": "1.0.0",
+  "description": "Christmas techs lights-out ticket system with GroupMe + Netlify + Supabase",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo \"No build step\"",
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "@netlify/functions": "^2.0.0",
+    "@supabase/supabase-js": "^2.0.0"
+  }
+}
