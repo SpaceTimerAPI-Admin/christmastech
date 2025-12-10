@@ -6,8 +6,13 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const bucketName = process.env.SUPABASE_BUCKET_NAME || 'ticket-photos';
 
+// GroupMe + site URL
+const groupmeBotId = process.env.GROUPME_BOT_ID;
+const groupmePostUrl =
+  process.env.GROUPME_BOT_POST_URL || 'https://api.groupme.com/v3/bots/post';
+const siteBaseUrl = process.env.SITE_BASE_URL || 'https://swoems.com';
+
 // Radius in meters to consider a "duplicate" ticket.
-// This uses Haversine distance so nearby but not identical coordinates are caught.
 const DUPLICATE_RADIUS_METERS = 40;
 
 // Only consider tickets from the last N days for duplicate detection.
@@ -38,6 +43,30 @@ function distanceMeters(lat1, lon1, lat2, lon2) {
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+async function sendToGroupMe(text) {
+  if (!groupmeBotId) {
+    console.warn('GROUPME_BOT_ID not set; skipping GroupMe announcement.');
+    return;
+  }
+
+  try {
+    const res = await fetch(groupmePostUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bot_id: groupmeBotId,
+        text,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error('GroupMe post failed with status', res.status);
+    }
+  } catch (err) {
+    console.error('Error posting to GroupMe:', err);
+  }
 }
 
 exports.handler = async (event) => {
@@ -174,12 +203,7 @@ exports.handler = async (event) => {
 
     if (openTickets && openTickets.length > 0) {
       duplicates = openTickets.filter((t) => {
-        const d = distanceMeters(
-          lat,
-          lon,
-          t.lat,
-          t.lon
-        );
+        const d = distanceMeters(lat, lon, t.lat, t.lon);
         return d <= DUPLICATE_RADIUS_METERS;
       });
     }
@@ -245,6 +269,16 @@ exports.handler = async (event) => {
       console.error('Error inserting ticket photo:', photoErr);
     }
   }
+
+  // 5) Announce to GroupMe
+  const ticketLink = `${siteBaseUrl}/ticket.html?id=${ticket.id}`;
+  const techPart = tech_name ? `Reported by ${tech_name}\n` : '';
+  const msg =
+    `🎄 New lights ticket #${ticket.id} – ${location_friendly}\n` +
+    techPart +
+    ticketLink;
+
+  await sendToGroupMe(msg);
 
   return {
     statusCode: 200,
