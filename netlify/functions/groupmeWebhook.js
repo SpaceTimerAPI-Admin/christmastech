@@ -1,18 +1,19 @@
 // netlify/functions/groupmeWebhook.js
 
+const { createClient } = require('@supabase/supabase-js');
+
 const groupmeBotId = process.env.GROUPME_BOT_ID;
 const groupmePostUrl =
   process.env.GROUPME_BOT_POST_URL || 'https://api.groupme.com/v3/bots/post';
 
-// Base URL where your ticket UI is hosted.
-// Set this to "https://swoems.com" in Netlify env vars for production.
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Where your UI lives
 const siteBaseUrl = process.env.SITE_BASE_URL || 'https://swoems.com';
 
 async function sendToGroupMe(text) {
-  if (!groupmeBotId) {
-    console.warn('GROUPME_BOT_ID not set; skipping GroupMe post.');
-    return;
-  }
+  if (!groupmeBotId) return;
 
   try {
     const res = await fetch(groupmePostUrl, {
@@ -23,21 +24,58 @@ async function sendToGroupMe(text) {
         text,
       }),
     });
+
     if (!res.ok) {
-      console.error('GroupMe post failed with status', res.status);
+      console.error('GroupMe post failed:', res.status);
     }
   } catch (err) {
     console.error('Error posting to GroupMe:', err);
   }
 }
 
+//
+// Build the same 5pm message used in dailyReport.js
+//
+async function buildReportMessage() {
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return '⚠️ Supabase environment variables not configured.';
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  const { data: tickets, error } = await supabase
+    .from('tickets')
+    .select('id, location_friendly')
+    .eq('status', 'open')
+    .order('id', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching tickets for manual report:', error);
+    return '⚠️ Error fetching open tickets.';
+  }
+
+  let text = '';
+
+  if (!tickets || tickets.length === 0) {
+    text += `🎄 5pm report: No open light issues. Nice work!\n\n`;
+  } else {
+    text += `🎄 Open Light Issues (Manual Report)\n\n`;
+
+    tickets.forEach(t => {
+      const link = `${siteBaseUrl}/ticket.html?id=${t.id}`;
+      text += `#${t.id} – ${t.location_friendly}\n${link}\n\n`;
+    });
+  }
+
+  text += `📋 Dashboard:\n${siteBaseUrl}/dashboard.html\n\n`;
+  text += `📝 Create a New Ticket:\n${siteBaseUrl}/new.html`;
+
+  return text;
+}
+
 exports.handler = async (event) => {
-  // GroupMe always POSTs messages to your callback URL
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 200,
-      body: 'ok',
-    };
+    return { statusCode: 200, body: 'ok' };
   }
 
   let body;
@@ -49,30 +87,35 @@ exports.handler = async (event) => {
   }
 
   const senderType = body.sender_type;
-  const rawText = (body.text || '').trim();
+  const rawText = (body.text || '').trim().toLowerCase();
 
-  // Ignore messages from bots (including this bot)
+  // Ignore messages from bots
   if (senderType === 'bot') {
     return { statusCode: 200, body: 'ok' };
   }
 
-  const text = rawText.toLowerCase();
+  //
+  // COMMANDS
+  //
 
-  // /open → send "create a new ticket" link
-  if (text === '/open') {
-    const link = `${siteBaseUrl}/new.html`;
-    await sendToGroupMe(`📝 New lights ticket form:\n${link}`);
+  // /open → link to new ticket
+  if (rawText === '/open') {
+    await sendToGroupMe(`📝 New lights ticket form:\n${siteBaseUrl}/new.html`);
+    return { statusCode: 200, body: 'ok' };
   }
 
-  // /list tickets → send dashboard link
-  if (text === '/list tickets') {
-    const link = `${siteBaseUrl}/dashboard.html`;
-    await sendToGroupMe(`📋 Lights ticket dashboard:\n${link}`);
+  // /list tickets → dashboard link
+  if (rawText === '/list tickets') {
+    await sendToGroupMe(`📋 Lights ticket dashboard:\n${siteBaseUrl}/dashboard.html`);
+    return { statusCode: 200, body: 'ok' };
   }
 
-  // Always return 200 so GroupMe is happy
-  return {
-    statusCode: 200,
-    body: 'ok',
-  };
+  // /report → manual full report message
+  if (rawText === '/report') {
+    const msg = await buildReportMessage();
+    await sendToGroupMe(msg);
+    return { statusCode: 200, body: 'ok' };
+  }
+
+  return { statusCode: 200, body: 'ok' };
 };
