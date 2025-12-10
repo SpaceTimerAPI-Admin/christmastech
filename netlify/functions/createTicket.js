@@ -4,9 +4,14 @@ const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const bucketName = process.env.SUPABASE_BUCKET_NAME || 'ticket-photos';
 
-// Radius in meters to consider a "duplicate" ticket
-const DUPLICATE_RADIUS_METERS = 25;
+// Radius in meters to consider a "duplicate" ticket.
+// This uses Haversine distance so nearby but not identical coordinates are caught.
+const DUPLICATE_RADIUS_METERS = 40;
+
+// Only consider tickets from the last N days for duplicate detection.
+const DUPLICATE_LOOKBACK_DAYS = 3;
 
 // Haversine distance in meters between two coords
 function distanceMeters(lat1, lon1, lat2, lon2) {
@@ -84,6 +89,7 @@ exports.handler = async (event) => {
     };
   }
 
+  // 1) If photo provided, upload to Supabase Storage
   let photoUrl = null;
   if (photoBase64 && photoFilename) {
     try {
@@ -97,10 +103,17 @@ exports.handler = async (event) => {
         .toString(36)
         .slice(2)}.${ext}`;
 
+      const contentType =
+        ext === 'jpg' || ext === 'jpeg'
+          ? 'image/jpeg'
+          : ext === 'png'
+          ? 'image/png'
+          : 'image/octet-stream';
+
       const { error: uploadError } = await supabase.storage
-        .from('ticket-photos')
+        .from(bucketName)
         .upload(path, buffer, {
-          contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+          contentType,
         });
 
       if (uploadError) {
@@ -108,13 +121,17 @@ exports.handler = async (event) => {
         return {
           statusCode: 500,
           body: JSON.stringify({
-            error: 'Failed to upload photo',
+            error:
+              'Failed to upload photo: ' +
+              (uploadError.message ||
+                uploadError.error_description ||
+                'unknown error'),
           }),
         };
       }
 
       const { data: publicUrlData } = supabase.storage
-        .from('ticket-photos')
+        .from(bucketName)
         .getPublicUrl(path);
 
       photoUrl = publicUrlData.publicUrl;
@@ -123,20 +140,27 @@ exports.handler = async (event) => {
       return {
         statusCode: 500,
         body: JSON.stringify({
-          error: 'Exception while uploading photo',
+          error:
+            'Exception while uploading photo: ' +
+            (err.message || 'unknown error'),
         }),
       };
     }
   }
 
+  // 2) Duplicate check (only if we have lat/lon and not forcing new)
   let duplicates = [];
   if (lat != null && lon != null && !forceNew) {
+    const since = new Date();
+    since.setDate(since.getDate() - DUPLICATE_LOOKBACK_DAYS);
+
     const { data: openTickets, error: openErr } = await supabase
       .from('tickets')
       .select(
         'id, tech_name, location_friendly, description, created_at, lat, lon, status'
       )
-      .eq('status', 'open');
+      .eq('status', 'open')
+      .gte('created_at', since.toISOString());
 
     if (openErr) {
       console.error('Error fetching open tickets:', openErr);
@@ -180,6 +204,7 @@ exports.handler = async (event) => {
     }
   }
 
+  // 3) Create a new ticket
   const { data: ticket, error: ticketErr } = await supabase
     .from('tickets')
     .insert([
@@ -205,6 +230,7 @@ exports.handler = async (event) => {
     };
   }
 
+  // 4) Link the photo record if we have one
   if (photoUrl) {
     const { error: photoErr } = await supabase
       .from('ticket_photos')
