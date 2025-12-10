@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>All Tickets</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      padding: 1rem;
+      background: #050814;
+      color: #f7f7f7;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .ticket {
+      background: #11172a;
+      padding: 0.75rem;
+      margin-bottom: 0.75rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    }
+    .ticket a {
+      color: #55d6ff;
+      font-weight: 600;
+    }
+    .status {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 0.5rem;
+      text-transform: uppercase;
+    }
+    .open { background: #2ecc71; color: #000; }
+    .in_progress { background: #f1c40f; color: #000; }
+    .fixed { background: #3498db; color: #000; }
+    .meta {
+      font-size: 0.8rem;
+      color: #bbb;
+    }
+  </style>
+</head>
+<body>
+
+<h1>All Tickets</h1>
+<div id="list">Loading...</div>
+
+<script>
+  async function loadTickets() {
+    const list = document.getElementById('list');
+    try {
+      const res = await fetch('/.netlify/functions/listTickets');
+      const data = await res.json();
+
+      if (data.error) {
+        list.textContent = 'Error: ' + data.error;
+        return;
+      }
+
+      if (!data.tickets || data.tickets.length === 0) {
+        list.textContent = 'No tickets found.';
+        return;
+      }
+
+      list.innerHTML = '';
+
+      data.tickets.forEach(t => {
+        const div = document.createElement('div');
+        div.className = 'ticket';
+
+        const created = new Date(t.created_at).toLocaleString();
+
+        div.innerHTML = `
+          <div>
+            <strong>Ticket #${t.id}</strong>
+            <span class="status ${t.status}">${t.status}</span>
+          </div>
+          <div>${t.location_friendly}</div>
+          <div class="meta">
+            Reported by ${t.tech_name || 'Unknown'} on ${created}
+          </div>
+          <a href="/ticket.html?id=${t.id}">View Ticket</a>
+        `;
+
+        list.appendChild(div);
+      });
+    } catch (err) {
+      list.textContent = 'Network error loading tickets.';
+      console.error(err);
+    }
+  }
+
+  loadTickets();
+</script>
+
+</body>
+</html>

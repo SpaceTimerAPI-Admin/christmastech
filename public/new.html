@@ -150,7 +150,6 @@
     const form = document.getElementById('ticketForm');
     const submitBtn = document.getElementById('submitBtn');
 
-    // Get geolocation on load
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -273,7 +272,7 @@
               Reported by ${t.tech_name || 'Unknown'} on ${created}<br/>
               Status: ${t.status}
             </div>
-            <div class="small">Description: ${t.description || '(none)'}</div>
+            <div class="small">Description: ${t.description || '(none)'} </div>
             <div class="dup-buttons">
               <button type="button" onclick="attachToExisting(${t.id})">
                 Attach my photo/notes to #${t.id}

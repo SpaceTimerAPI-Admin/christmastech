@@ -7,6 +7,9 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const groupmeBotId = process.env.GROUPME_BOT_ID;
 const groupmePostUrl = process.env.GROUPME_BOT_POST_URL || 'https://api.groupme.com/v3/bots/post';
 
+// TODO: change this to your real Netlify site URL
+const SITE_BASE_URL = 'https://YOUR_NETLIFY_SITE_URL';
+
 async function sendToGroupMe(text) {
   if (!groupmeBotId) {
     console.warn('GROUPME_BOT_ID not set; skipping GroupMe post.');
@@ -66,7 +69,7 @@ exports.handler = async () => {
 
   let text = '🎄 Open Light Issues (5pm report)\n\n';
   tickets.forEach((t) => {
-    const link = `https://YOUR_NETLIFY_SITE_URL/ticket.html?id=${t.id}`;
+    const link = `${SITE_BASE_URL}/ticket.html?id=${t.id}`;
     text += `#${t.id} – ${t.location_friendly}\n${link}\n\n`;
   });
 
@@ -77,5 +80,3 @@ exports.handler = async () => {
     body: JSON.stringify({ ok: true }),
   };
 };
-
-// Note: schedule is configured via netlify.toml

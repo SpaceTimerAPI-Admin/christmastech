@@ -4,6 +4,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const bucketName = process.env.SUPABASE_BUCKET_NAME || 'ticket-photos';
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -64,10 +65,17 @@ exports.handler = async (event) => {
         .toString(36)
         .slice(2)}.${ext}`;
 
+      const contentType =
+        ext === 'jpg' || ext === 'jpeg'
+          ? 'image/jpeg'
+          : ext === 'png'
+          ? 'image/png'
+          : 'image/octet-stream';
+
       const { error: uploadError } = await supabase.storage
-        .from('ticket-photos')
+        .from(bucketName)
         .upload(path, buffer, {
-          contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+          contentType,
         });
 
       if (uploadError) {
@@ -75,13 +83,17 @@ exports.handler = async (event) => {
         return {
           statusCode: 500,
           body: JSON.stringify({
-            error: 'Failed to upload photo',
+            error:
+              'Failed to upload photo: ' +
+              (uploadError.message ||
+                uploadError.error_description ||
+                'unknown error'),
           }),
         };
       }
 
-      const { data: publicUrlData } = supabase.storage
-        .from('ticket-photos')
+      const { data: publicUrlData } = await supabase.storage
+        .from(bucketName)
         .getPublicUrl(path);
 
       photoUrl = publicUrlData.publicUrl;
@@ -90,7 +102,9 @@ exports.handler = async (event) => {
       return {
         statusCode: 500,
         body: JSON.stringify({
-          error: 'Exception while uploading photo',
+          error:
+            'Exception while uploading photo: ' +
+            (err.message || 'unknown error'),
         }),
       };
     }
