@@ -1,11 +1,220 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Ticket Details</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8" />
+  <title>Ticket Details</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      padding: 1rem;
+      background: #050814;
+      color: #f7f7f7;
+    }
+    .card {
+      max-width: 520px;
+      margin: 0 auto;
+      background: #11172a;
+      padding: 1rem;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 0.5rem;
+      font-size: 1.4rem;
+    }
+    .meta {
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-bottom: 0.75rem;
+    }
+    .status {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .status-open {
+      background: #2ecc71;
+      color: #000;
+    }
+    .status-in_progress {
+      background: #f1c40f;
+      color: #000;
+    }
+    .status-fixed {
+      background: #3498db;
+      color: #000;
+    }
+    .section-title {
+      font-size: 0.95rem;
+      margin-top: 0.75rem;
+      margin-bottom: 0.25rem;
+      font-weight: 600;
+    }
+    .photos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .photos img {
+      max-width: 48%;
+      border-radius: 8px;
+      border: 1px solid #333;
+    }
+    a {
+      color: #55d6ff;
+    }
+    #statusMsg {
+      margin-top: 0.75rem;
+      font-size: 0.85rem;
+      color: #aaa;
+    }
+    button {
+      margin-top: 0.75rem;
+      padding: 0.5rem 1rem;
+      border-radius: 999px;
+      border: none;
+      background: #2ecc71;
+      color: #000;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #555;
+      color: #ccc;
+      cursor: default;
+    }
+  </style>
 </head>
 <body>
-<p>This will display ticket details. Fill in later.</p>
+  <div class="card">
+    <h1 id="title">Ticket</h1>
+    <div class="meta" id="meta"></div>
+    <div id="statusBadge"></div>
+
+    <div class="section-title">Friendly Location</div>
+    <div id="location"></div>
+
+    <div class="section-title">Description</div>
+    <div id="description"></div>
+
+    <div class="section-title">Location on Map</div>
+    <div id="mapLink"></div>
+
+    <div class="section-title">Photos</div>
+    <div id="photos" class="photos"></div>
+
+    <div id="statusMsg"></div>
+
+    <!-- Optional simple status toggle (manual use by leads only) -->
+    <button id="markFixedBtn">Mark as Fixed</button>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    const titleEl = document.getElementById('title');
+    const metaEl = document.getElementById('meta');
+    const statusBadgeEl = document.getElementById('statusBadge');
+    const locEl = document.getElementById('location');
+    const descEl = document.getElementById('description');
+    const mapEl = document.getElementById('mapLink');
+    const photosEl = document.getElementById('photos');
+    const statusMsg = document.getElementById('statusMsg');
+    const markFixedBtn = document.getElementById('markFixedBtn');
+
+    if (!id) {
+      titleEl.textContent = 'Ticket not found';
+      statusMsg.textContent = 'Missing ticket id in URL.';
+      markFixedBtn.style.display = 'none';
+    } else {
+      loadTicket();
+    }
+
+    async function loadTicket() {
+      statusMsg.textContent = 'Loading ticket...';
+      try {
+        const res = await fetch('/.netlify/functions/getTicket?id=' + encodeURIComponent(id));
+        const data = await res.json();
+        if (data.error) {
+          titleEl.textContent = 'Ticket error';
+          statusMsg.textContent = 'Error: ' + data.error;
+          markFixedBtn.style.display = 'none';
+          return;
+        }
+        renderTicket(data);
+      } catch (err) {
+        console.error(err);
+        statusMsg.textContent = 'Network error loading ticket.';
+        markFixedBtn.style.display = 'none';
+      }
+    }
+
+    function renderTicket(data) {
+      const t = data.ticket;
+      const photos = data.photos || [];
+      titleEl.textContent = 'Ticket #' + t.id;
+      const created = new Date(t.created_at).toLocaleString();
+      metaEl.textContent = 'Reported by ' + (t.tech_name || 'Unknown') + ' on ' + created;
+
+      const statusClass = 'status-' + t.status.replace(/\s+/g, '_');
+      statusBadgeEl.innerHTML = '<span class="status ' + statusClass + '">' + t.status + '</span>';
+
+      locEl.textContent = t.location_friendly || '(none)';
+      descEl.textContent = t.description || '(none)';
+
+      if (t.lat != null && t.lon != null) {
+        const url = 'https://maps.google.com/?q=' + t.lat + ',' + t.lon;
+        mapEl.innerHTML = '<a href="' + url + '" target="_blank" rel="noopener">Open in Google Maps</a>';
+      } else {
+        mapEl.textContent = 'No GPS location recorded for this ticket.';
+      }
+
+      photosEl.innerHTML = '';
+      if (photos.length === 0) {
+        photosEl.innerHTML = '<span style="font-size:0.85rem;color:#999;">No photos attached.</span>';
+      } else {
+        photos.forEach(p => {
+          const img = document.createElement('img');
+          img.src = p.photo_url;
+          img.alt = 'Ticket photo';
+          photosEl.appendChild(img);
+        });
+      }
+
+      statusMsg.textContent = '';
+      markFixedBtn.onclick = () => updateStatus('fixed');
+    }
+
+    async function updateStatus(newStatus) {
+      statusMsg.textContent = 'Updating status...';
+      markFixedBtn.disabled = true;
+      try {
+        const res = await fetch('/.netlify/functions/updateTicketStatus', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, status: newStatus })
+        });
+        const data = await res.json();
+        if (data.error) {
+          statusMsg.textContent = 'Error: ' + data.error;
+          markFixedBtn.disabled = false;
+          return;
+        }
+        statusMsg.textContent = 'Status updated.';
+        await loadTicket();
+      } catch (err) {
+        console.error(err);
+        statusMsg.textContent = 'Network error updating status.';
+        markFixedBtn.disabled = false;
+      }
+    }
+  </script>
 </body>
 </html>

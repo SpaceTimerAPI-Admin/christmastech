@@ -1,3 +1,6 @@
 [build]
   publish = "public"
   functions = "netlify/functions"
+
+[functions."dailyReport"]
+  schedule = "0 22 * * *"

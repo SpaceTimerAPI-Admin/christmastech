@@ -5,12 +5,377 @@
   <title>New Lights Ticket</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: system-ui, sans-serif; padding: 1rem; background: #050814; color: #f7f7f7; }
-    h1 { text-align: center; margin-bottom: 1rem; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      padding: 1rem;
+      background: #050814;
+      color: #f7f7f7;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 0.5rem;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-bottom: 1rem;
+    }
+    form {
+      max-width: 480px;
+      margin: 0 auto;
+      background: #11172a;
+      padding: 1rem;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+    }
+    label {
+      display: block;
+      margin-top: 0.75rem;
+      font-size: 0.9rem;
+    }
+    input[type="text"],
+    textarea {
+      width: 100%;
+      padding: 0.5rem;
+      border-radius: 8px;
+      border: 1px solid #444;
+      margin-top: 0.25rem;
+      font-size: 1rem;
+      box-sizing: border-box;
+      background: #050814;
+      color: #f7f7f7;
+    }
+    textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+    input[type="file"] {
+      margin-top: 0.5rem;
+      color: #ddd;
+    }
+    button {
+      margin-top: 1rem;
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 999px;
+      border: none;
+      background: #2ecc71;
+      color: #000;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #555;
+      color: #ccc;
+      cursor: default;
+    }
+    .small {
+      font-size: 0.8rem;
+      color: #aaa;
+    }
+    #status {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+    .duplicate-card {
+      background: #1b2338;
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+      margin-top: 0.5rem;
+      font-size: 0.85rem;
+    }
+    .duplicate-card strong {
+      color: #ffd166;
+    }
+    .dup-buttons {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .dup-buttons button {
+      flex: 1;
+      font-size: 0.75rem;
+      padding: 0.5rem;
+    }
+    a {
+      color: #55d6ff;
+    }
   </style>
 </head>
 <body>
   <h1>New Lights Ticket</h1>
-  <p>⚠️ This is a truncated demo file. Please re-paste full version into your project.</p>
+  <div class="subtitle">Use this when you <strong>cannot restore</strong> a lights issue in the park.</div>
+
+  <form id="ticketForm">
+    <label>
+      Your Name
+      <input type="text" id="tech_name" required placeholder="e.g. Anthony" />
+    </label>
+
+    <label>
+      Friendly Location Name
+      <span class="small">(e.g. “Main Gate Tree”, “Penguin Exhibit Archway”)</span>
+      <input type="text" id="location_friendly" required />
+    </label>
+
+    <label>
+      Description of Issue
+      <span class="small">(what's wrong, what you already tried, etc.)</span>
+      <textarea id="description"></textarea>
+    </label>
+
+    <label>
+      Photo of Issue
+      <span class="small">(optional but strongly recommended)</span>
+      <input type="file" id="photo" accept="image/*" capture="environment" />
+    </label>
+
+    <!-- hidden fields for geo -->
+    <input type="hidden" id="lat" />
+    <input type="hidden" id="lon" />
+
+    <button type="submit" id="submitBtn">Submit Ticket</button>
+
+    <div id="status"></div>
+  </form>
+
+  <script>
+    let currentLat = null;
+    let currentLon = null;
+    let lastPayload = null;
+
+    const statusEl = document.getElementById('status');
+    const form = document.getElementById('ticketForm');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // Get geolocation on load
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          currentLat = pos.coords.latitude;
+          currentLon = pos.coords.longitude;
+          document.getElementById('lat').value = currentLat;
+          document.getElementById('lon').value = currentLon;
+        },
+        (err) => {
+          console.warn('Geo error:', err);
+          statusEl.textContent = 'Warning: unable to get GPS. Ticket will save but duplicate check may be less accurate.';
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+      );
+    } else {
+      statusEl.textContent = 'Geolocation not supported on this device.';
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const tech_name = document.getElementById('tech_name').value.trim();
+      const location_friendly = document.getElementById('location_friendly').value.trim();
+      const description = document.getElementById('description').value.trim();
+      const photoInput = document.getElementById('photo');
+
+      if (!tech_name || !location_friendly) {
+        statusEl.textContent = 'Name and friendly location are required.';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      statusEl.textContent = 'Submitting ticket...';
+
+      let photoBase64 = null;
+      let photoFilename = null;
+
+      if (photoInput.files && photoInput.files[0]) {
+        const file = photoInput.files[0];
+        photoBase64 = await fileToBase64(file);
+        photoFilename = file.name || 'photo.jpg';
+      }
+
+      const payload = {
+        tech_name,
+        location_friendly,
+        description,
+        lat: currentLat,
+        lon: currentLon,
+        photoBase64,
+        photoFilename,
+        forceNew: false
+      };
+
+      lastPayload = payload;
+
+      try {
+        const res = await fetch('/.netlify/functions/createTicket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+          statusEl.textContent = 'Error: ' + data.error;
+          submitBtn.disabled = false;
+          return;
+        }
+
+        if (data.created) {
+          const link = `/ticket.html?id=${encodeURIComponent(data.ticketId)}`;
+          statusEl.innerHTML = `
+            ✅ Ticket created.<br/>
+            <a href="${link}">Open ticket #${data.ticketId}</a>
+          `;
+          form.reset();
+          submitBtn.disabled = false;
+          return;
+        }
+
+        if (!data.created && data.reason === 'duplicates_found') {
+          renderDuplicateOptions(data.duplicates);
+          submitBtn.disabled = false;
+          return;
+        }
+
+        statusEl.textContent = 'Unexpected response from server.';
+        submitBtn.disabled = false;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Network error; could not submit ticket.';
+        submitBtn.disabled = false;
+      }
+    });
+
+    function renderDuplicateOptions(duplicates) {
+      if (!duplicates || duplicates.length === 0) {
+        statusEl.textContent = 'Server reported duplicates but none were returned.';
+        return;
+      }
+
+      let html = '<p>We found possible existing ticket(s) near this location:</p>';
+      duplicates.forEach((t) => {
+        const created = new Date(t.created_at).toLocaleString();
+        html += `
+          <div class="duplicate-card">
+            <div><strong>Ticket #${t.id}</strong> – ${t.location_friendly}</div>
+            <div class="small">
+              Reported by ${t.tech_name || 'Unknown'} on ${created}<br/>
+              Status: ${t.status}
+            </div>
+            <div class="small">Description: ${t.description || '(none)'}</div>
+            <div class="dup-buttons">
+              <button type="button" onclick="attachToExisting(${t.id})">
+                Attach my photo/notes to #${t.id}
+              </button>
+              <button type="button" onclick="createNewAnyway()">
+                Create new ticket anyway
+              </button>
+            </div>
+          </div>
+        `;
+      });
+
+      statusEl.innerHTML = html;
+    }
+
+    async function attachToExisting(ticketId) {
+      if (!lastPayload) {
+        statusEl.textContent = 'Missing payload for attachment.';
+        return;
+      }
+
+      statusEl.textContent = `Attaching to ticket #${ticketId}...`;
+      submitBtn.disabled = true;
+
+      try {
+        const res = await fetch('/.netlify/functions/attachToTicket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ticketId,
+            tech_name: lastPayload.tech_name,
+            description: lastPayload.description,
+            lat: lastPayload.lat,
+            lon: lastPayload.lon,
+            photoBase64: lastPayload.photoBase64,
+            photoFilename: lastPayload.photoFilename
+          })
+        });
+
+        const data = await res.json();
+        if (data.error) {
+          statusEl.textContent = 'Error: ' + data.error;
+          submitBtn.disabled = false;
+          return;
+        }
+
+        const link = `/ticket.html?id=${encodeURIComponent(ticketId)}`;
+        statusEl.innerHTML = `
+          ✅ Attached your info to ticket #${ticketId}.<br/>
+          <a href="${link}">Open ticket #${ticketId}</a>
+        `;
+        form.reset();
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Network error while attaching to ticket.';
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
+    async function createNewAnyway() {
+      if (!lastPayload) {
+        statusEl.textContent = 'Missing payload for creating a new ticket.';
+        return;
+      }
+
+      statusEl.textContent = 'Creating new ticket anyway...';
+      submitBtn.disabled = true;
+
+      const payload = Object.assign({}, lastPayload, { forceNew: true });
+
+      try {
+        const res = await fetch('/.netlify/functions/createTicket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (data.error) {
+          statusEl.textContent = 'Error: ' + data.error;
+          submitBtn.disabled = false;
+          return;
+        }
+
+        if (data.created) {
+          const link = `/ticket.html?id=${encodeURIComponent(data.ticketId)}`;
+          statusEl.innerHTML = `
+            ✅ New ticket created.<br/>
+            <a href="${link}">Open ticket #${data.ticketId}</a>
+          `;
+          form.reset();
+        } else {
+          statusEl.textContent = 'Could not create ticket; unexpected response.';
+        }
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Network error while creating new ticket.';
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+  </script>
 </body>
 </html>
