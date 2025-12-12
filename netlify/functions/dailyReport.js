@@ -66,7 +66,7 @@ exports.handler = async () => {
     };
   }
 
-  let text = '🎄 Open Light Issues (5pm report)\n\n';
+  let text = '🎄 Open Light Issues (5pm report) - Please prioritize these open tickets during first walk around. Submit New tickets at SWOEMS.com/new\n\n';
   tickets.forEach((t) => {
     const link = `${siteBaseUrl}/ticket.html?id=${t.id}`;
     text += `#${t.id} – ${t.location_friendly}\n${link}\n\n`;
