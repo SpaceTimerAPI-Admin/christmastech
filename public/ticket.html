@@ -125,7 +125,6 @@
     const qs = new URLSearchParams(location.search);
     const ticketId = qs.get('id');
 
-    // Persist author name convenience
     const savedName = localStorage.getItem('ticket_comment_author');
     if (savedName) commentAuthor.value = savedName;
 
@@ -190,13 +189,15 @@
         const photos = data.photos || [];
         if (photos.length > 0) {
           photos.forEach(p => {
+            const url = p.photo_url || p.url || p.image_url || p.imageUrl;
+            if (!url) return;
             const a = document.createElement('a');
-            a.href = p.photo_url;
+            a.href = url;
             a.target = '_blank';
             a.rel = 'noopener noreferrer';
             const img = document.createElement('img');
             img.className = 'photo';
-            img.src = p.photo_url;
+            img.src = url;
             img.alt = 'Ticket photo';
             a.appendChild(img);
             photoGrid.appendChild(a);
@@ -206,7 +207,6 @@
           photosCard.style.display = 'none';
         }
 
-        // Comments
         renderComments(data.comments || []);
         commentsCard.style.display = 'block';
 
