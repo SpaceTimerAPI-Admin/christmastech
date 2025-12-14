@@ -1,74 +1,82 @@
 // netlify/functions/getTicket.js
-//
-// Returns one ticket + its photos + its comments (if enabled)
-
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 exports.handler = async (event) => {
-  if (event.httpMethod !== 'GET') {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
-  }
-
   if (!supabaseUrl || !supabaseServiceKey) {
-    return { statusCode: 500, body: JSON.stringify({ error: 'Supabase env vars are not set' }) };
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Supabase env vars missing' }),
+    };
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  const params = event.queryStringParameters || {};
-  const id = parseInt(params.id, 10);
+  const idRaw = event.queryStringParameters?.id;
+  const id = parseInt(idRaw, 10);
 
   if (!id || Number.isNaN(id)) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Valid ticket id is required' }) };
+    return {
+      statusCode: 400,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Valid id query parameter is required' }),
+    };
   }
 
-  const { data: ticket, error: ticketErr } = await supabase
-    .from('tickets')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (ticketErr || !ticket) {
-    console.error('Error fetching ticket:', ticketErr);
-    return { statusCode: 404, body: JSON.stringify({ error: 'Ticket not found' }) };
-  }
-
-  const { data: photos, error: photoErr } = await supabase
-    .from('ticket_photos')
-    .select('id, photo_url, uploaded_at')
-    .eq('ticket_id', id)
-    .order('uploaded_at', { ascending: true });
-
-  if (photoErr) console.error('Error fetching photos:', photoErr);
-
-  // Comments (optional feature; if table doesn't exist yet, just return [])
-  let comments = [];
   try {
-    const { data: commentRows, error: commentErr } = await supabase
-      .from('ticket_comments')
-      .select('id, author, body, created_at')
+    const { data: ticket, error: ticketErr } = await supabase
+      .from('tickets')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (ticketErr || !ticket) {
+      return {
+        statusCode: 404,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Ticket not found' }),
+      };
+    }
+
+    const { data: photos, error: photosErr } = await supabase
+      .from('ticket_photos')
+      .select('id, ticket_id, photo_url, created_at')
       .eq('ticket_id', id)
       .order('created_at', { ascending: true });
 
-    if (commentErr) {
-      console.error('Error fetching comments:', commentErr);
-    } else {
-      comments = commentRows || [];
+    if (photosErr) {
+      console.error('ticket_photos error:', photosErr);
     }
-  } catch (e) {
-    // table may not exist yet until SQL is run
-    comments = [];
-  }
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify({
-      ticket,
-      photos: photos || [],
-      comments,
-    }),
-  };
+    const { data: comments, error: commentsErr } = await supabase
+      .from('ticket_comments')
+      .select('id, ticket_id, author, body, created_at')
+      .eq('ticket_id', id)
+      .order('created_at', { ascending: true });
+
+    if (commentsErr) {
+      // If table doesn't exist yet, show a useful error in logs but still return ticket+photos
+      console.error('ticket_comments error:', commentsErr);
+    }
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticket,
+        photos: photos || [],
+        comments: comments || [],
+      }),
+    };
+  } catch (err) {
+    console.error('Unhandled getTicket error:', err);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Unhandled error', details: err.message || String(err) }),
+    };
+  }
 };

@@ -5,313 +5,295 @@
   <title>Ticket Details</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      padding: 1rem;
-      background: #050814;
-      color: #f7f7f7;
-    }
-    .card {
-      max-width: 520px;
-      margin: 0 auto;
-      background: #11172a;
-      padding: 1rem;
-      border-radius: 12px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.6);
-    }
-    h1 {
-      margin-top: 0;
-      margin-bottom: 0.5rem;
-      font-size: 1.4rem;
-    }
-    .meta {
-      font-size: 0.85rem;
-      color: #aaa;
-      margin-bottom: 0.75rem;
-    }
-    .status {
-      display: inline-block;
-      padding: 0.15rem 0.6rem;
-      border-radius: 999px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-    }
-    .status-open {
-      background: #2ecc71;
-      color: #000;
-    }
-    .status-in_progress {
-      background: #f1c40f;
-      color: #000;
-    }
-    .status-fixed {
-      background: #3498db;
-      color: #000;
-    }
-    .section-title {
-      font-size: 0.95rem;
-      margin-top: 0.75rem;
-      margin-bottom: 0.25rem;
-      font-weight: 600;
-    }
-    .photos {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-top: 0.5rem;
-    }
-    .photos img {
-      max-width: 48%;
-      border-radius: 8px;
-      border: 1px solid #333;
-    }
-    a {
-      color: #55d6ff;
-    }
-    #statusMsg {
-      margin-top: 0.75rem;
-      font-size: 0.85rem;
-      color: #aaa;
-    }
-    button {
-      margin-top: 0.75rem;
-      padding: 0.5rem 1rem;
-      border-radius: 999px;
-      border: none;
-      background: #2ecc71;
-      color: #000;
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    button:disabled {
-      background: #555;
-      color: #ccc;
-      cursor: default;
-    }
+    body { margin:0; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background:#050814; color:#f7f7f7; }
+    header { padding:0.75rem 1rem; background:#090f22; box-shadow:0 2px 6px rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:space-between;}
+    header a { color:#55d6ff; text-decoration:none; font-size:0.9rem; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 1rem; }
+    .card { background:#11172a; border-radius:12px; padding: 1rem; margin-bottom: 1rem; box-shadow:0 4px 12px rgba(0,0,0,0.35); }
+    .row { display:flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+    .pill { display:inline-block; padding:0.15rem 0.6rem; border-radius:999px; font-size:0.75rem; font-weight:700; text-transform:uppercase; }
+    .pill.open { background:#2ecc71; color:#000; }
+    .pill.in_progress { background:#f1c40f; color:#000; }
+    .pill.fixed { background:#3498db; color:#000; }
+    .muted { color:#a7a7a7; font-size:0.9rem; }
+    .btn { border:0; border-radius:10px; padding:0.55rem 0.85rem; cursor:pointer; font-weight:700; }
+    .btn.primary { background:#55d6ff; color:#000; }
+    .btn.warn { background:#f1c40f; color:#000; }
+    .btn.good { background:#2ecc71; color:#000; }
+    .btn.gray { background:#2a3557; color:#f7f7f7; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; }
+    img.photo { width:100%; border-radius:10px; border:1px solid #1e2640; }
+    textarea, input { width:100%; box-sizing:border-box; padding:0.6rem 0.7rem; border-radius:10px; border:1px solid #1e2640; background:#0b1022; color:#f7f7f7; }
+    label { font-size:0.85rem; color:#cfcfcf; display:block; margin-bottom:0.35rem; }
+    .comment { border-top: 1px solid #1e2640; padding-top: 0.75rem; margin-top: 0.75rem; }
+    .comment:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+    .error { color:#ff9aa2; }
+    .ok { color:#a7ffb4; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1 id="title">Ticket</h1>
-    <div class="meta" id="meta"></div>
-    <div id="statusBadge"></div>
+  <header>
+    <div>
+      <strong>Ticket Details</strong>
+      <span class="muted" id="ticketIdLabel"></span>
+    </div>
+    <div class="row" style="gap:0.75rem;">
+      <a href="/dashboard.html">Dashboard</a>
+      <a href="/new.html">+ New Ticket</a>
+    </div>
+  </header>
 
-    <div class="section-title">Friendly Location</div>
-    <div id="location"></div>
+  <div class="wrap">
+    <div id="statusMsg" class="muted">Loading ticket...</div>
 
-    <div class="section-title">Description</div>
-    <div id="description"></div>
+    <div id="ticketCard" class="card" style="display:none;">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <h2 style="margin:0 0 0.35rem 0;" id="locationFriendly"></h2>
+          <div class="muted" id="metaLine"></div>
+        </div>
+        <div class="row">
+          <span id="statusPill" class="pill">status</span>
+        </div>
+      </div>
 
-    <div class="section-title">Location on Map</div>
-    <div id="mapLink"></div>
+      <div style="margin-top:0.75rem;" class="muted" id="description"></div>
 
-    <div class="section-title">Photos</div>
-    <div id="photos" class="photos"></div>
+      <div style="margin-top:0.9rem;" class="row">
+        <button class="btn good" id="btnFix" style="display:none;">Mark Fixed</button>
+        <button class="btn warn" id="btnReopen" style="display:none;">Reopen (Unfix)</button>
+        <button class="btn gray" id="btnProgress" style="display:none;">Mark In-Progress</button>
+      </div>
+    </div>
 
-    <div id="statusMsg"></div>
+    <div id="photosCard" class="card" style="display:none;">
+      <h3 style="margin:0 0 0.75rem 0;">Photos</h3>
+      <div id="photoGrid" class="grid"></div>
+    </div>
 
-    <button id="markFixedBtn">Mark as Fixed</button>
+    <div id="commentsCard" class="card" style="display:none;">
+      <h3 style="margin:0 0 0.75rem 0;">Comments / Updates</h3>
+
+      <div class="row" style="margin-bottom:0.75rem;">
+        <div style="flex:1; min-width:240px;">
+          <label for="commentAuthor">Your name</label>
+          <input id="commentAuthor" placeholder="e.g. Anthony" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-bottom:0.75rem;">
+        <div style="flex:1; min-width:240px;">
+          <label for="commentBody">Add an update</label>
+          <textarea id="commentBody" rows="3" placeholder="What changed? What did you test? Any parts needed?"></textarea>
+        </div>
+      </div>
+
+      <div class="row" style="justify-content:flex-end;">
+        <button class="btn primary" id="btnAddComment">Post Comment</button>
+      </div>
+
+      <div id="commentPostMsg" class="muted" style="margin-top:0.75rem;"></div>
+
+      <div style="margin-top:1rem;" id="commentList"></div>
+    </div>
   </div>
 
   <script>
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get('id');
-    const titleEl = document.getElementById('title');
-    const metaEl = document.getElementById('meta');
-    const statusBadgeEl = document.getElementById('statusBadge');
-    const locEl = document.getElementById('location');
-    const descEl = document.getElementById('description');
-    const mapEl = document.getElementById('mapLink');
-    const photosEl = document.getElementById('photos');
     const statusMsg = document.getElementById('statusMsg');
-    const markFixedBtn = document.getElementById('markFixedBtn');
+    const ticketCard = document.getElementById('ticketCard');
+    const photosCard = document.getElementById('photosCard');
+    const commentsCard = document.getElementById('commentsCard');
 
-    if (!id) {
-      titleEl.textContent = 'Ticket not found';
-      statusMsg.textContent = 'Missing ticket id in URL.';
-      markFixedBtn.style.display = 'none';
-    } else {
-      loadTicket();
+    const ticketIdLabel = document.getElementById('ticketIdLabel');
+    const locationFriendly = document.getElementById('locationFriendly');
+    const metaLine = document.getElementById('metaLine');
+    const descriptionEl = document.getElementById('description');
+    const statusPill = document.getElementById('statusPill');
+
+    const btnFix = document.getElementById('btnFix');
+    const btnReopen = document.getElementById('btnReopen');
+    const btnProgress = document.getElementById('btnProgress');
+
+    const photoGrid = document.getElementById('photoGrid');
+
+    const commentAuthor = document.getElementById('commentAuthor');
+    const commentBody = document.getElementById('commentBody');
+    const btnAddComment = document.getElementById('btnAddComment');
+    const commentList = document.getElementById('commentList');
+    const commentPostMsg = document.getElementById('commentPostMsg');
+
+    const qs = new URLSearchParams(location.search);
+    const ticketId = qs.get('id');
+
+    // Persist author name convenience
+    const savedName = localStorage.getItem('ticket_comment_author');
+    if (savedName) commentAuthor.value = savedName;
+
+    function esc(s) {
+      return (s ?? '').toString()
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+    }
+
+    function setPill(status) {
+      statusPill.className = 'pill ' + status;
+      statusPill.textContent = status.replace('_', ' ');
+      btnFix.style.display = status === 'open' || status === 'in_progress' ? 'inline-block' : 'none';
+      btnProgress.style.display = status === 'open' ? 'inline-block' : 'none';
+      btnReopen.style.display = status === 'fixed' ? 'inline-block' : 'none';
+    }
+
+    async function fetchJson(url, opts) {
+      const res = await fetch(url, opts);
+      const ct = res.headers.get('content-type') || '';
+      const isJson = ct.includes('application/json');
+      if (!res.ok) {
+        let details = '';
+        try {
+          if (isJson) {
+            const j = await res.json();
+            details = j.error || j.details || JSON.stringify(j);
+          } else {
+            details = await res.text();
+          }
+        } catch (e) {}
+        throw new Error(`HTTP ${res.status}: ${details || res.statusText}`);
+      }
+      if (!isJson) throw new Error('Expected JSON response but got: ' + ct);
+      return await res.json();
     }
 
     async function loadTicket() {
+      if (!ticketId) {
+        statusMsg.innerHTML = '<span class="error">Missing ticket id in URL. Use /ticket.html?id=123</span>';
+        return;
+      }
+
+      ticketIdLabel.textContent = ` (#${ticketId})`;
       statusMsg.textContent = 'Loading ticket...';
+
       try {
-        const res = await fetch('/.netlify/functions/getTicket?id=' + encodeURIComponent(id));
-        const data = await res.json();
-        if (data.error) {
-          titleEl.textContent = 'Ticket error';
-          statusMsg.textContent = 'Error: ' + data.error;
-          markFixedBtn.style.display = 'none';
-          return;
+        const data = await fetchJson(`/.netlify/functions/getTicket?id=${encodeURIComponent(ticketId)}`);
+        const t = data.ticket;
+
+        locationFriendly.textContent = t.location_friendly || '(no location)';
+        const created = t.created_at ? new Date(t.created_at).toLocaleString() : '';
+        metaLine.textContent = `Reported by ${t.tech_name || 'Unknown'}${created ? ' on ' + created : ''}`;
+        descriptionEl.textContent = t.description || '';
+        setPill(t.status || 'open');
+
+        ticketCard.style.display = 'block';
+
+        // Photos
+        photoGrid.innerHTML = '';
+        const photos = data.photos || [];
+        if (photos.length > 0) {
+          photos.forEach(p => {
+            const a = document.createElement('a');
+            a.href = p.photo_url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            const img = document.createElement('img');
+            img.className = 'photo';
+            img.src = p.photo_url;
+            img.alt = 'Ticket photo';
+            a.appendChild(img);
+            photoGrid.appendChild(a);
+          });
+          photosCard.style.display = 'block';
+        } else {
+          photosCard.style.display = 'none';
         }
-        dataCache = data;
-        renderTicket(data);
+
+        // Comments
+        renderComments(data.comments || []);
+        commentsCard.style.display = 'block';
+
+        statusMsg.textContent = '';
       } catch (err) {
         console.error(err);
-        statusMsg.textContent = 'Network error loading ticket.';
-        markFixedBtn.style.display = 'none';
+        statusMsg.innerHTML = `<span class="error">Network error loading ticket. ${esc(err.message)}</span>`;
+        ticketCard.style.display = 'none';
+        photosCard.style.display = 'none';
+        commentsCard.style.display = 'none';
       }
     }
 
-    function renderTicket(data) {
-      const t = data.ticket;
-      const photos = data.photos || [];
-      titleEl.textContent = 'Ticket #' + t.id;
-      const created = new Date(t.created_at).toLocaleString();
-      metaEl.textContent = 'Reported by ' + (t.tech_name || 'Unknown') + ' on ' + created;
-
-      const statusClass = 'status-' + t.status.replace(/\s+/g, '_');
-      statusBadgeEl.innerHTML = '<span class="status ' + statusClass + '">' + t.status + '</span>';
-
-      locEl.textContent = t.location_friendly || '(none)';
-      descEl.textContent = t.description || '(none)';
-
-      if (t.lat != null && t.lon != null) {
-        const url = 'https://maps.google.com/?q=' + t.lat + ',' + t.lon;
-        mapEl.innerHTML = '<a href="' + url + '" target="_blank" rel="noopener">Open in Google Maps</a>';
-      } else {
-        mapEl.textContent = 'No GPS location recorded for this ticket.';
-      }
-
-      photosEl.innerHTML = '';
-      if (photos.length === 0) {
-        photosEl.innerHTML = '<span style="font-size:0.85rem;color:#999;">No photos attached.</span>';
-      } else {
-        photos.forEach(p => {
-          const img = document.createElement('img');
-          img.src = p.photo_url;
-          img.alt = 'Ticket photo';
-          photosEl.appendChild(img);
-        });
-      }
-
-      // Comments
-      renderComments(data.comments || []);
-
-      // Buttons: allow unfix (reopen)
-      if (t.status === 'fixed') {
-        markFixedBtn.style.display = 'none';
-        reopenBtn.style.display = 'inline-block';
-      } else {
-        markFixedBtn.style.display = 'inline-block';
-        reopenBtn.style.display = 'none';
-      }
-
-      statusMsg.textContent = '';
-      markFixedBtn.onclick = () => updateStatus('fixed');
-      reopenBtn.onclick = () => updateS
     function renderComments(comments) {
-      commentsEl.innerHTML = '';
       if (!comments || comments.length === 0) {
-        commentsEl.innerHTML = '<div style="font-size:0.85rem;color:#999;">No comments yet.</div>';
+        commentList.innerHTML = '<div class="muted">No comments yet.</div>';
         return;
       }
 
-      comments.forEach(c => {
-        const div = document.createElement('div');
-        div.style.background = '#11172a';
-        div.style.padding = '0.5rem 0.6rem';
-        div.style.borderRadius = '8px';
-        div.style.marginBottom = '0.5rem';
-
+      commentList.innerHTML = comments.map(c => {
         const when = c.created_at ? new Date(c.created_at).toLocaleString() : '';
-        const author = c.author || 'Tech';
-        div.innerHTML = `
-          <div style="font-size:0.85rem;color:#bbb;margin-bottom:0.2rem;">
-            <strong style="color:#fff;">${author}</strong> • ${when}
+        return `
+          <div class="comment">
+            <div><strong>${esc(c.author || 'Unknown')}</strong> <span class="muted">${esc(when)}</span></div>
+            <div style="margin-top:0.25rem;">${esc(c.body || '')}</div>
           </div>
-          <div style="white-space:pre-wrap;">${escapeHtml(c.body || '')}</div>
         `;
-        commentsEl.appendChild(div);
-      });
-    }
-
-    function escapeHtml(str) {
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    async function addComment() {
-      const body = (newCommentEl.value || '').trim();
-      const author = (commentAuthorEl.value || '').trim();
-      if (!body) {
-        statusMsg.textContent = 'Comment cannot be empty.';
-        return;
-      }
-
-      addCommentBtn.disabled = true;
-      statusMsg.textContent = 'Adding comment...';
-
-      try {
-        const res = await fetch('/.netlify/functions/addComment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ticketId: id,
-            author: author || null,
-            body
-          })
-        });
-
-        const data = await res.json();
-        if (data.error) {
-          statusMsg.textContent = 'Error: ' + data.error;
-          addCommentBtn.disabled = false;
-          return;
-        }
-
-        newCommentEl.value = '';
-        if (author) localStorage.setItem('ticketCommentAuthor', author);
-        statusMsg.textContent = 'Comment added.';
-        await loadTicket();
-      } catch (err) {
-        console.error(err);
-        statusMsg.textContent = 'Network error adding comment.';
-      } finally {
-        addCommentBtn.disabled = false;
-      }
-    }
-
-tatus('open');
+      }).join('');
     }
 
     async function updateStatus(newStatus) {
-      statusMsg.textContent = 'Updating status...';
-      markFixedBtn.disabled = true;
-      reopenBtn.disabled = true;
+      if (!ticketId) return;
       try {
-        const res = await fetch('/.netlify/functions/updateTicketStatus', {
+        statusMsg.textContent = 'Updating status...';
+        await fetchJson('/.netlify/functions/updateTicketStatus', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, status: newStatus })
+          body: JSON.stringify({ id: ticketId, status: newStatus })
         });
-        const data = await res.json();
-        if (data.error) {
-          statusMsg.textContent = 'Error: ' + data.error;
-          markFixedBtn.disabled = false;
-        reopenBtn.disabled = false;
-        reopenBtn.disabled = false;
-          return;
-        }
-        statusMsg.textContent = 'Status updated.';
         await loadTicket();
-    addCommentBtn.addEventListener('click', addComment);
-
       } catch (err) {
         console.error(err);
-        statusMsg.textContent = 'Network error updating status.';
-        markFixedBtn.disabled = false;
-        reopenBtn.disabled = false;
-        reopenBtn.disabled = false;
+        statusMsg.innerHTML = `<span class="error">Failed to update status. ${esc(err.message)}</span>`;
       }
     }
+
+    btnFix.addEventListener('click', () => updateStatus('fixed'));
+    btnProgress.addEventListener('click', () => updateStatus('in_progress'));
+    btnReopen.addEventListener('click', () => updateStatus('open'));
+
+    btnAddComment.addEventListener('click', async () => {
+      const author = (commentAuthor.value || '').trim();
+      const body = (commentBody.value || '').trim();
+
+      if (!author) {
+        commentPostMsg.innerHTML = '<span class="error">Please enter your name.</span>';
+        return;
+      }
+      if (!body) {
+        commentPostMsg.innerHTML = '<span class="error">Please enter a comment.</span>';
+        return;
+      }
+
+      localStorage.setItem('ticket_comment_author', author);
+
+      try {
+        btnAddComment.disabled = true;
+        commentPostMsg.textContent = 'Posting...';
+
+        await fetchJson('/.netlify/functions/addComment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticket_id: Number(ticketId), author, body })
+        });
+
+        commentBody.value = '';
+        commentPostMsg.innerHTML = '<span class="ok">Comment posted.</span>';
+        await loadTicket();
+      } catch (err) {
+        console.error(err);
+        commentPostMsg.innerHTML = `<span class="error">Failed to post. ${esc(err.message)}</span>`;
+      } finally {
+        btnAddComment.disabled = false;
+      }
+    });
+
+    loadTicket();
   </script>
 </body>
 </html>
