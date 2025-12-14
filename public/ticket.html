@@ -13,14 +13,12 @@
     .row { display:flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
     .pill { display:inline-block; padding:0.15rem 0.6rem; border-radius:999px; font-size:0.75rem; font-weight:700; text-transform:uppercase; }
     .pill.open { background:#2ecc71; color:#000; }
-    .pill.in_progress { background:#f1c40f; color:#000; }
     .pill.fixed { background:#3498db; color:#000; }
     .muted { color:#a7a7a7; font-size:0.9rem; }
     .btn { border:0; border-radius:10px; padding:0.55rem 0.85rem; cursor:pointer; font-weight:700; }
     .btn.primary { background:#55d6ff; color:#000; }
     .btn.warn { background:#f1c40f; color:#000; }
     .btn.good { background:#2ecc71; color:#000; }
-    .btn.gray { background:#2a3557; color:#f7f7f7; }
     .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; }
     img.photo { width:100%; border-radius:10px; border:1px solid #1e2640; }
     textarea, input { width:100%; box-sizing:border-box; padding:0.6rem 0.7rem; border-radius:10px; border:1px solid #1e2640; background:#0b1022; color:#f7f7f7; }
@@ -62,7 +60,6 @@
       <div style="margin-top:0.9rem;" class="row">
         <button class="btn good" id="btnFix" style="display:none;">Mark Fixed</button>
         <button class="btn warn" id="btnReopen" style="display:none;">Reopen (Unfix)</button>
-        <button class="btn gray" id="btnProgress" style="display:none;">Mark In-Progress</button>
       </div>
     </div>
 
@@ -112,7 +109,6 @@
 
     const btnFix = document.getElementById('btnFix');
     const btnReopen = document.getElementById('btnReopen');
-    const btnProgress = document.getElementById('btnProgress');
 
     const photoGrid = document.getElementById('photoGrid');
 
@@ -129,17 +125,13 @@
     if (savedName) commentAuthor.value = savedName;
 
     function esc(s) {
-      return (s ?? '').toString()
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;');
+      return (s ?? '').toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
     }
 
     function setPill(status) {
       statusPill.className = 'pill ' + status;
-      statusPill.textContent = status.replace('_', ' ');
-      btnFix.style.display = status === 'open' || status === 'in_progress' ? 'inline-block' : 'none';
-      btnProgress.style.display = status === 'open' ? 'inline-block' : 'none';
+      statusPill.textContent = status;
+      btnFix.style.display = status === 'open' ? 'inline-block' : 'none';
       btnReopen.style.display = status === 'fixed' ? 'inline-block' : 'none';
     }
 
@@ -149,14 +141,7 @@
       const isJson = ct.includes('application/json');
       if (!res.ok) {
         let details = '';
-        try {
-          if (isJson) {
-            const j = await res.json();
-            details = j.error || j.details || JSON.stringify(j);
-          } else {
-            details = await res.text();
-          }
-        } catch (e) {}
+        try { details = isJson ? ((await res.json()).error || '') : await res.text(); } catch {}
         throw new Error(`HTTP ${res.status}: ${details || res.statusText}`);
       }
       if (!isJson) throw new Error('Expected JSON response but got: ' + ct);
@@ -180,7 +165,7 @@
         const created = t.created_at ? new Date(t.created_at).toLocaleString() : '';
         metaLine.textContent = `Reported by ${t.tech_name || 'Unknown'}${created ? ' on ' + created : ''}`;
         descriptionEl.textContent = t.description || '';
-        setPill(t.status || 'open');
+        setPill((t.status || 'open').toLowerCase());
 
         ticketCard.style.display = 'block';
 
@@ -189,16 +174,12 @@
         const photos = data.photos || [];
         if (photos.length > 0) {
           photos.forEach(p => {
-            const url = p.photo_url || p.url || p.image_url || p.imageUrl;
+            const url = p.photo_url || p.url || p.image_url;
             if (!url) return;
             const a = document.createElement('a');
-            a.href = url;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
+            a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
             const img = document.createElement('img');
-            img.className = 'photo';
-            img.src = url;
-            img.alt = 'Ticket photo';
+            img.className = 'photo'; img.src = url; img.alt = 'Ticket photo';
             a.appendChild(img);
             photoGrid.appendChild(a);
           });
@@ -225,7 +206,6 @@
         commentList.innerHTML = '<div class="muted">No comments yet.</div>';
         return;
       }
-
       commentList.innerHTML = comments.map(c => {
         const when = c.created_at ? new Date(c.created_at).toLocaleString() : '';
         return `
@@ -239,12 +219,13 @@
 
     async function updateStatus(newStatus) {
       if (!ticketId) return;
+      const actor = (commentAuthor.value || '').trim();
       try {
         statusMsg.textContent = 'Updating status...';
         await fetchJson('/.netlify/functions/updateTicketStatus', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: ticketId, status: newStatus })
+          body: JSON.stringify({ id: ticketId, status: newStatus, actor })
         });
         await loadTicket();
       } catch (err) {
@@ -254,21 +235,14 @@
     }
 
     btnFix.addEventListener('click', () => updateStatus('fixed'));
-    btnProgress.addEventListener('click', () => updateStatus('in_progress'));
     btnReopen.addEventListener('click', () => updateStatus('open'));
 
     btnAddComment.addEventListener('click', async () => {
       const author = (commentAuthor.value || '').trim();
       const body = (commentBody.value || '').trim();
 
-      if (!author) {
-        commentPostMsg.innerHTML = '<span class="error">Please enter your name.</span>';
-        return;
-      }
-      if (!body) {
-        commentPostMsg.innerHTML = '<span class="error">Please enter a comment.</span>';
-        return;
-      }
+      if (!author) { commentPostMsg.innerHTML = '<span class="error">Please enter your name.</span>'; return; }
+      if (!body) { commentPostMsg.innerHTML = '<span class="error">Please enter a comment.</span>'; return; }
 
       localStorage.setItem('ticket_comment_author', author);
 

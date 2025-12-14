@@ -4,154 +4,31 @@
   <meta charset="UTF-8" />
   <title>Ticket Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
-
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <style>
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #050814;
-      color: #f7f7f7;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-    }
-
-    header {
-      padding: 0.75rem 1rem;
-      background: #090f22;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    header h1 {
-      font-size: 1.1rem;
-      margin: 0;
-    }
-
-    header .nav-links a {
-      color: #55d6ff;
-      text-decoration: none;
-      font-size: 0.9rem;
-      margin-left: 0.75rem;
-    }
-
-    .content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .filters {
-      padding: 0.5rem 1rem;
-      background: #080d1b;
-      font-size: 0.85rem;
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .filters label {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.25rem;
-    }
-
-    .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-
-    @media (min-width: 900px) {
-      .main {
-        flex-direction: row;
-      }
-    }
-
-    .list-panel {
-      flex: 0 0 40%;
-      max-width: 480px;
-      padding: 0.75rem 1rem;
-      overflow-y: auto;
-      border-right: 1px solid #11172a;
-    }
-
-    .map-panel {
-      flex: 1;
-      min-height: 320px;
-    }
-
-    #map {
-      width: 100%;
-      height: 100%;
-      min-height: 300px;
-    }
-
-    .ticket {
-      background: #11172a;
-      padding: 0.6rem 0.75rem;
-      margin-bottom: 0.6rem;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-
-    .ticket-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-    }
-
-    .ticket-title {
-      font-weight: 600;
-    }
-
-    .status {
-      display: inline-block;
-      padding: 0.1rem 0.5rem;
-      border-radius: 999px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-
+    body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background: #050814; color: #f7f7f7; display: flex; flex-direction: column; min-height: 100vh; }
+    header { padding: 0.75rem 1rem; background: #090f22; box-shadow: 0 2px 6px rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 1.1rem; margin: 0; }
+    header .nav-links a { color: #55d6ff; text-decoration: none; font-size: 0.9rem; margin-left: 0.75rem; }
+    .content { flex: 1; display: flex; flex-direction: column; }
+    .filters { padding: 0.5rem 1rem; background: #080d1b; font-size: 0.85rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+    .filters label { display: inline-flex; align-items: center; gap: 0.25rem; }
+    .main { flex: 1; display: flex; flex-direction: column; }
+    @media (min-width: 900px) { .main { flex-direction: row; } }
+    .list-panel { flex: 0 0 40%; max-width: 480px; padding: 0.75rem 1rem; overflow-y: auto; border-right: 1px solid #11172a; }
+    .map-panel { flex: 1; min-height: 320px; }
+    #map { width: 100%; height: 100%; min-height: 300px; }
+    .ticket { background: #11172a; padding: 0.6rem 0.75rem; margin-bottom: 0.6rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.35); font-size: 0.9rem; cursor: pointer; }
+    .ticket-header { display: flex; justify-content: space-between; align-items: baseline; }
+    .ticket-title { font-weight: 600; }
+    .status { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
     .status.open { background: #2ecc71; color: #000; }
-    .status.in_progress { background: #f1c40f; color: #000; }
     .status.fixed { background: #3498db; color: #000; }
-
-    .ticket-meta {
-      font-size: 0.75rem;
-      color: #aaa;
-      margin-top: 0.25rem;
-    }
-
-    .ticket a {
-      color: #55d6ff;
-      text-decoration: none;
-      font-size: 0.8rem;
-    }
-
-    #statusMsg {
-      padding: 0.35rem 1rem;
-      font-size: 0.8rem;
-      color: #aaa;
-    }
-
-    #counts {
-      font-size: 0.8rem;
-      color: #ccc;
-    }
+    .ticket-meta { font-size: 0.75rem; color: #aaa; margin-top: 0.25rem; }
+    .ticket a { color: #55d6ff; text-decoration: none; font-size: 0.8rem; }
+    #statusMsg { padding: 0.35rem 1rem; font-size: 0.8rem; color: #aaa; }
+    #counts { font-size: 0.8rem; color: #ccc; }
   </style>
 </head>
 <body>
@@ -166,38 +43,22 @@
   <div class="content">
     <div class="filters">
       <span>Filter:</span>
-      <label>
-        <input type="radio" name="statusFilter" value="all" checked />
-        All
-      </label>
-      <label>
-        <input type="radio" name="statusFilter" value="open" />
-        Open only
-      </label>
-      <label>
-        <input type="radio" name="statusFilter" value="fixed" />
-        Fixed only
-      </label>
+      <label><input type="radio" name="statusFilter" value="all" checked /> All</label>
+      <label><input type="radio" name="statusFilter" value="open" /> Open only</label>
+      <label><input type="radio" name="statusFilter" value="fixed" /> Fixed only</label>
       <span id="counts"></span>
     </div>
 
     <div id="statusMsg">Loading tickets...</div>
 
     <div class="main">
-      <div class="list-panel">
-        <div id="ticketList"></div>
-      </div>
-      <div class="map-panel">
-        <div id="map"></div>
-      </div>
+      <div class="list-panel"><div id="ticketList"></div></div>
+      <div class="map-panel"><div id="map"></div></div>
     </div>
   </div>
 
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
   <script>
     let allTickets = [];
@@ -210,16 +71,10 @@
 
     async function loadTickets() {
       statusMsg.textContent = 'Loading tickets...';
-
       try {
         const res = await fetch('/.netlify/functions/listTickets');
         const data = await res.json();
-
-        if (data.error) {
-          statusMsg.textContent = 'Error: ' + data.error;
-          return;
-        }
-
+        if (data.error) { statusMsg.textContent = 'Error: ' + data.error; return; }
         allTickets = data.tickets || [];
         statusMsg.textContent = '';
         render();
@@ -229,19 +84,13 @@
       }
     }
 
-    function render() {
-      renderList();
-      renderMapMarkers();
-      updateCounts();
-    }
+    function render() { renderList(); renderMapMarkers(); updateCounts(); }
 
     function updateCounts() {
       const openCount = allTickets.filter(t => t.status === 'open').length;
       const fixedCount = allTickets.filter(t => t.status === 'fixed').length;
       const total = allTickets.length;
-
-      countsEl.textContent =
-        `Total: ${total} | Open: ${openCount} | Fixed: ${fixedCount}`;
+      countsEl.textContent = `Total: ${total} | Open: ${openCount} | Fixed: ${fixedCount}`;
     }
 
     function getFilteredTickets() {
@@ -252,103 +101,59 @@
     function renderList() {
       const tickets = getFilteredTickets();
       ticketListEl.innerHTML = '';
-
       if (tickets.length === 0) {
         ticketListEl.innerHTML = '<div style="font-size:0.9rem;color:#aaa;">No tickets for this filter.</div>';
         return;
       }
-
       tickets.forEach(t => {
         const div = document.createElement('div');
         div.className = 'ticket';
-
         const created = new Date(t.created_at).toLocaleString();
-
         div.innerHTML = `
           <div class="ticket-header">
             <div class="ticket-title">#${t.id} – ${t.location_friendly}</div>
             <span class="status ${t.status}">${t.status}</span>
           </div>
-          <div class="ticket-meta">
-            Reported by ${t.tech_name || 'Unknown'} on ${created}
-          </div>
-          <div class="ticket-meta">
-            ${t.lat != null && t.lon != null ? 'GPS recorded' : 'No GPS'}
-          </div>
+          <div class="ticket-meta">Reported by ${t.tech_name || 'Unknown'} on ${created}</div>
+          <div class="ticket-meta">${t.lat != null && t.lon != null ? 'GPS recorded' : 'No GPS'}</div>
           <a href="/ticket.html?id=${t.id}">View details</a>
         `;
-
         div.addEventListener('click', () => {
-          if (t.lat != null && t.lon != null && map) {
-            map.setView([t.lat, t.lon], 17);
-          }
+          if (t.lat != null && t.lon != null && map) map.setView([t.lat, t.lon], 17);
         });
-
         ticketListEl.appendChild(div);
       });
     }
 
     function initMap() {
       map = L.map('map').setView([28.41, -81.46], 13);
-
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
+        maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
-
       markerLayer = L.layerGroup().addTo(map);
     }
 
     function renderMapMarkers() {
       if (!map || !markerLayer) return;
-
       markerLayer.clearLayers();
-
-      const openWithCoords = allTickets.filter(
-        t => t.status === 'open' && t.lat != null && t.lon != null
-      );
-
-      if (openWithCoords.length === 0) {
-        return;
-      }
-
+      const openWithCoords = allTickets.filter(t => t.status === 'open' && t.lat != null && t.lon != null);
       const bounds = [];
-
       openWithCoords.forEach(t => {
-        const lat = t.lat;
-        const lon = t.lon;
-        if (lat == null || lon == null) return;
-
-        const marker = L.circleMarker([lat, lon], {
-          radius: 8,
-          weight: 2,
-          color: '#2ecc71',
-          fillColor: '#2ecc71',
-          fillOpacity: 0.8
-        });
-
-        const popupHtml = `
+        const marker = L.circleMarker([t.lat, t.lon], { radius: 8, weight: 2, color: '#2ecc71', fillColor: '#2ecc71', fillOpacity: 0.8 });
+        marker.bindPopup(`
           <strong>Ticket #${t.id}</strong><br/>
           ${t.location_friendly}<br/>
           Status: ${t.status}<br/>
           <a href="/ticket.html?id=${t.id}" target="_blank">Open details</a>
-        `;
-
-        marker.bindPopup(popupHtml);
+        `);
         marker.addTo(markerLayer);
-        bounds.push([lat, lon]);
+        bounds.push([t.lat, t.lon]);
       });
-
-      if (bounds.length > 0) {
-        map.fitBounds(bounds, { padding: [40, 40] });
-      }
+      if (bounds.length > 0) map.fitBounds(bounds, { padding: [40, 40] });
     }
 
     document.querySelectorAll('input[name="statusFilter"]').forEach(radio => {
-      radio.addEventListener('change', (e) => {
-        currentFilter = e.target.value;
-        renderList();
-      });
+      radio.addEventListener('change', (e) => { currentFilter = e.target.value; renderList(); });
     });
 
     initMap();
