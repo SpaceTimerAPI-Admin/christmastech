@@ -147,6 +147,7 @@
           markFixedBtn.style.display = 'none';
           return;
         }
+        dataCache = data;
         renderTicket(data);
       } catch (err) {
         console.error(err);
@@ -187,13 +188,104 @@
         });
       }
 
+      // Comments
+      renderComments(data.comments || []);
+
+      // Buttons: allow unfix (reopen)
+      if (t.status === 'fixed') {
+        markFixedBtn.style.display = 'none';
+        reopenBtn.style.display = 'inline-block';
+      } else {
+        markFixedBtn.style.display = 'inline-block';
+        reopenBtn.style.display = 'none';
+      }
+
       statusMsg.textContent = '';
       markFixedBtn.onclick = () => updateStatus('fixed');
+      reopenBtn.onclick = () => updateS
+    function renderComments(comments) {
+      commentsEl.innerHTML = '';
+      if (!comments || comments.length === 0) {
+        commentsEl.innerHTML = '<div style="font-size:0.85rem;color:#999;">No comments yet.</div>';
+        return;
+      }
+
+      comments.forEach(c => {
+        const div = document.createElement('div');
+        div.style.background = '#11172a';
+        div.style.padding = '0.5rem 0.6rem';
+        div.style.borderRadius = '8px';
+        div.style.marginBottom = '0.5rem';
+
+        const when = c.created_at ? new Date(c.created_at).toLocaleString() : '';
+        const author = c.author || 'Tech';
+        div.innerHTML = `
+          <div style="font-size:0.85rem;color:#bbb;margin-bottom:0.2rem;">
+            <strong style="color:#fff;">${author}</strong> • ${when}
+          </div>
+          <div style="white-space:pre-wrap;">${escapeHtml(c.body || '')}</div>
+        `;
+        commentsEl.appendChild(div);
+      });
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    async function addComment() {
+      const body = (newCommentEl.value || '').trim();
+      const author = (commentAuthorEl.value || '').trim();
+      if (!body) {
+        statusMsg.textContent = 'Comment cannot be empty.';
+        return;
+      }
+
+      addCommentBtn.disabled = true;
+      statusMsg.textContent = 'Adding comment...';
+
+      try {
+        const res = await fetch('/.netlify/functions/addComment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ticketId: id,
+            author: author || null,
+            body
+          })
+        });
+
+        const data = await res.json();
+        if (data.error) {
+          statusMsg.textContent = 'Error: ' + data.error;
+          addCommentBtn.disabled = false;
+          return;
+        }
+
+        newCommentEl.value = '';
+        if (author) localStorage.setItem('ticketCommentAuthor', author);
+        statusMsg.textContent = 'Comment added.';
+        await loadTicket();
+      } catch (err) {
+        console.error(err);
+        statusMsg.textContent = 'Network error adding comment.';
+      } finally {
+        addCommentBtn.disabled = false;
+      }
+    }
+
+tatus('open');
     }
 
     async function updateStatus(newStatus) {
       statusMsg.textContent = 'Updating status...';
       markFixedBtn.disabled = true;
+      reopenBtn.disabled = true;
       try {
         const res = await fetch('/.netlify/functions/updateTicketStatus', {
           method: 'POST',
@@ -204,14 +296,20 @@
         if (data.error) {
           statusMsg.textContent = 'Error: ' + data.error;
           markFixedBtn.disabled = false;
+        reopenBtn.disabled = false;
+        reopenBtn.disabled = false;
           return;
         }
         statusMsg.textContent = 'Status updated.';
         await loadTicket();
+    addCommentBtn.addEventListener('click', addComment);
+
       } catch (err) {
         console.error(err);
         statusMsg.textContent = 'Network error updating status.';
         markFixedBtn.disabled = false;
+        reopenBtn.disabled = false;
+        reopenBtn.disabled = false;
       }
     }
   </script>

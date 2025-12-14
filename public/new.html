@@ -128,8 +128,8 @@
 
     <label>
       Photo of Issue
-      <span class="small">(optional but strongly recommended)</span>
-      <input type="file" id="photo" accept="image/*" capture="environment" />
+      <span class="small">(required)</span>
+      <input type="file" id="photo" accept="image/*" capture="environment"  required />
     </label>
 
     <!-- hidden fields for geo -->
@@ -187,6 +187,11 @@
 
       if (!tech_name || !location_friendly) {
         statusEl.textContent = 'Name and friendly location are required.';
+        return;
+      }
+
+      if (!photoInput.files || photoInput.files.length === 0) {
+        statusEl.textContent = 'Photo is required.';
         return;
       }
 

@@ -1,4 +1,9 @@
 // netlify/functions/updateTicketStatus.js
+//
+// Updates ticket status. Supports "unfix" by setting status back to "open".
+// Announces to GroupMe when a ticket transitions into "fixed".
+//
+// POST body: { id: number, status: 'open'|'in_progress'|'fixed' }
 
 const { createClient } = require('@supabase/supabase-js');
 
@@ -12,24 +17,16 @@ const groupmePostUrl =
 const siteBaseUrl = process.env.SITE_BASE_URL || 'https://swoems.com';
 
 async function sendToGroupMe(text) {
-  if (!groupmeBotId) {
-    console.warn('GROUPME_BOT_ID not set; skipping GroupMe status announcement.');
-    return;
-  }
+  if (!groupmeBotId) return;
 
   try {
     const res = await fetch(groupmePostUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bot_id: groupmeBotId,
-        text,
-      }),
+      body: JSON.stringify({ bot_id: groupmeBotId, text }),
     });
 
-    if (!res.ok) {
-      console.error('GroupMe post failed with status', res.status);
-    }
+    if (!res.ok) console.error('GroupMe post failed:', res.status);
   } catch (err) {
     console.error('Error posting to GroupMe:', err);
   }
@@ -37,17 +34,11 @@ async function sendToGroupMe(text) {
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed' }),
-    };
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
   if (!supabaseUrl || !supabaseServiceKey) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Supabase env vars are not set' }),
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: 'Supabase env vars are not set' }) };
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -55,76 +46,51 @@ exports.handler = async (event) => {
   let payload;
   try {
     payload = JSON.parse(event.body || '{}');
-  } catch (err) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: 'Invalid JSON body' }),
-    };
+  } catch {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
   }
 
   const id = parseInt(payload.id, 10);
   const status = payload.status;
 
   if (!id || Number.isNaN(id) || !status) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: 'id and status are required' }),
-    };
+    return { statusCode: 400, body: JSON.stringify({ error: 'id and status are required' }) };
   }
 
   const allowed = ['open', 'in_progress', 'fixed'];
   if (!allowed.includes(status)) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: 'Invalid status' }),
-    };
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid status' }) };
   }
 
-  // 1) Load current ticket so we know old status + details
+  // Load current ticket
   const { data: ticket, error: fetchErr } = await supabase
     .from('tickets')
-    .select('id, status, location_friendly, tech_name')
+    .select('id, status, location_friendly')
     .eq('id', id)
     .single();
 
   if (fetchErr || !ticket) {
-    console.error('Error fetching ticket before update:', fetchErr);
-    return {
-      statusCode: 404,
-      body: JSON.stringify({ error: 'Ticket not found' }),
-    };
+    return { statusCode: 404, body: JSON.stringify({ error: 'Ticket not found' }) };
   }
 
   const oldStatus = ticket.status;
 
-  // 2) Update status
+  // Update
   const { error: updateErr } = await supabase
     .from('tickets')
     .update({ status })
     .eq('id', id);
 
   if (updateErr) {
-    console.error('Error updating status:', updateErr);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to update status' }),
-    };
+    console.error('Error updating ticket status:', updateErr);
+    return { statusCode: 500, body: JSON.stringify({ error: 'Failed to update status' }) };
   }
 
-  // 3) If it just became fixed, announce it
+  // Announce fixed transition
   if (status === 'fixed' && oldStatus !== 'fixed') {
-    const location = ticket.location_friendly || '(no location)';
     const link = `${siteBaseUrl}/ticket.html?id=${id}`;
-    const msg =
-      `🎄 Ticket #${id} fixed – ${location}\n` +
-      `Marked fixed in the system.\n` +
-      link;
-
-    await sendToGroupMe(msg);
+    await sendToGroupMe(`🎄 Ticket #${id} fixed – ${ticket.location_friendly || '(no location)'}\n${link}`);
   }
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ ok: true }),
-  };
+  return { statusCode: 200, body: JSON.stringify({ ok: true }) };
 };
