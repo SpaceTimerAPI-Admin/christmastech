@@ -1,18 +1,31 @@
 // netlify/functions/attachToTicket.js
-//
-// Attach an additional photo (REQUIRED) + optional note to an existing ticket.
-// Used when a user selects an existing nearby duplicate ticket.
-//
-// Env vars:
-// - SUPABASE_URL
-// - SUPABASE_SERVICE_ROLE_KEY
-// - SUPABASE_BUCKET_NAME (default ticket-photos)
-
+// Adds additional info + REQUIRED photo to an existing ticket.
+// Stores photo reference in photo table if possible, and also updates tickets.photo_url if it was empty.
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const bucketName = process.env.SUPABASE_BUCKET_NAME || 'ticket-photos';
+
+async function insertPhotoRow(supabase, ticketId, photoUrl) {
+  const tables = ['ticket_photos', 'ticketphotos', 'ticket_images', 'ticketimages'];
+  for (const tableName of tables) {
+    try {
+      let { error } = await supabase.from(tableName).insert([{ ticket_id: ticketId, photo_url: photoUrl }]);
+      if (!error) return true;
+
+      ({ error } = await supabase.from(tableName).insert([{ ticketId: ticketId, photo_url: photoUrl }]));
+      if (!error) return true;
+
+      ({ error } = await supabase.from(tableName).insert([{ ticketid: ticketId, photo_url: photoUrl }]));
+      if (!error) return true;
+
+      ({ error } = await supabase.from(tableName).insert([{ ticket_id: ticketId, url: photoUrl }]));
+      if (!error) return true;
+    } catch (e) {}
+  }
+  return false;
+}
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -26,92 +39,75 @@ exports.handler = async (event) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   let payload;
-  try {
-    payload = JSON.parse(event.body || '{}');
-  } catch (err) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
+  try { payload = JSON.parse(event.body || '{}'); }
+  catch { return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) }; }
+
+  const ticketId = Number(payload.ticket_id || payload.id);
+  const note = (payload.note || payload.description || '').toString().trim();
+
+  const photoBase64 = payload.photoBase64;
+  const photoFilename = payload.photoFilename;
+
+  if (!ticketId || Number.isNaN(ticketId)) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'ticket_id is required' }) };
   }
 
-  const { ticketId, tech_name, description, lat, lon, photoBase64, photoFilename } = payload;
-
-  if (!ticketId) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'ticketId is required' }) };
-  }
-
-  // Require a photo for attaches too (keeps evidence consistent)
+  // Require photo for attachments too
   if (!photoBase64 || !photoFilename) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Photo is required to attach to a ticket' }) };
+    return { statusCode: 400, body: JSON.stringify({ error: 'Photo is required for updates' }) };
   }
 
-  // Verify ticket exists
-  const { data: ticket, error: ticketErr } = await supabase
-    .from('tickets')
-    .select('id, status')
-    .eq('id', ticketId)
-    .single();
-
-  if (ticketErr || !ticket) {
-    return { statusCode: 404, body: JSON.stringify({ error: 'Ticket not found' }) };
-  }
+  // Ensure ticket exists
+  const { data: t, error: tErr } = await supabase.from('tickets').select('*').eq('id', ticketId).single();
+  if (tErr || !t) return { statusCode: 404, body: JSON.stringify({ error: 'Ticket not found' }) };
 
   // Upload photo
   let photoUrl = null;
   try {
-    const base64Parts = String(photoBase64).split(',');
+    const base64Parts = photoBase64.split(',');
     const base64Data = base64Parts.length === 2 ? base64Parts[1] : photoBase64;
-
     const buffer = Buffer.from(base64Data, 'base64');
-    const ext = (String(photoFilename).split('.').pop() || 'jpg').toLowerCase();
-    const path = `attach-${ticketId}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
+    const ext = (photoFilename.split('.').pop() || 'jpg').toLowerCase();
+    const path = `ticket-${ticketId}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const contentType =
-      ext === 'jpg' || ext === 'jpeg'
-        ? 'image/jpeg'
-        : ext === 'png'
-        ? 'image/png'
-        : 'image/octet-stream';
+      (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' :
+      (ext === 'png') ? 'image/png' : 'application/octet-stream';
 
-    const { error: uploadError } = await supabase.storage
-      .from(bucketName)
-      .upload(path, buffer, { contentType });
-
+    const { error: uploadError } = await supabase.storage.from(bucketName).upload(path, buffer, { contentType });
     if (uploadError) {
       console.error('Upload error:', uploadError);
-      return { statusCode: 500, body: JSON.stringify({ error: 'Failed to upload photo' }) };
+      return { statusCode: 500, body: JSON.stringify({ error: 'Failed to upload photo', details: uploadError.message || uploadError }) };
     }
 
     const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(path);
     photoUrl = publicUrlData.publicUrl;
   } catch (err) {
     console.error('Upload exception:', err);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Exception while uploading photo' }) };
+    return { statusCode: 500, body: JSON.stringify({ error: 'Exception while uploading photo', details: err.message || String(err) }) };
   }
 
-  // Insert photo record
-  const { error: photoErr } = await supabase.from('ticket_photos').insert([
-    { ticket_id: ticketId, photo_url: photoUrl },
-  ]);
+  // Insert into photo table if possible
+  const ok = await insertPhotoRow(supabase, ticketId, photoUrl);
+  if (!ok) console.warn('Could not insert into a photo table; relying on tickets.photo_url fallback only.');
 
-  if (photoErr) {
-    console.error('Error inserting ticket photo:', photoErr);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Failed to attach photo' }) };
-  }
-
-  // Optional: add a comment-style note (if description provided)
-  if (description && String(description).trim().length > 0) {
-    // If comments table exists, write there; otherwise ignore.
+  // If ticket has no primary photo_url, set it
+  if (!t.photo_url) {
     try {
-      await supabase.from('ticket_comments').insert([
-        {
-          ticket_id: ticketId,
-          author: tech_name || null,
-          body: String(description).trim(),
-        },
-      ]);
-    } catch (e) {
-      // do nothing; table may not exist yet until SQL is run
+      await supabase.from('tickets').update({ photo_url: photoUrl }).eq('id', ticketId);
+    } catch (e) {}
+  }
+
+  // Optional note as a comment if comments table exists
+  if (note) {
+    const commentTables = ['ticket_comments', 'ticketcomments', 'comments'];
+    for (const tableName of commentTables) {
+      try {
+        const { error } = await supabase.from(tableName).insert([{ ticket_id: ticketId, author: payload.author || 'Update', body: note }]);
+        if (!error) break;
+      } catch (e) {}
     }
   }
 
-  return { statusCode: 200, body: JSON.stringify({ ok: true, ticketId, photoUrl }) };
+  return { statusCode: 200, body: JSON.stringify({ ok: true, photoUrl }) };
 };

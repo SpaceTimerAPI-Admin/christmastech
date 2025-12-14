@@ -1,33 +1,49 @@
 // netlify/functions/getTicket.js
+// Robust ticket loader that supports multiple historical schemas for photo/comment storage.
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-function normalizePhotos(ticket, photos) {
-  const out = Array.isArray(photos) ? [...photos] : [];
+function normalizePhotos(ticket, rows) {
+  const out = Array.isArray(rows) ? [...rows] : [];
 
-  // Backward-compat: if older schema stored a single photo URL on the ticket row itself
+  // Some older versions stored the primary photo on the ticket row itself
   const legacyUrl =
     ticket?.photo_url ||
     ticket?.photoUrl ||
     ticket?.photo ||
     ticket?.image_url ||
     ticket?.imageUrl ||
+    ticket?.photoURL ||
     null;
 
-  if (legacyUrl) {
-    const already = out.some(p => (p.photo_url || p.url) === legacyUrl);
-    if (!already) {
-      out.unshift({ id: 'legacy', ticket_id: ticket.id, photo_url: legacyUrl, created_at: ticket.created_at });
-    }
+  if (legacyUrl && !out.some(p => (p.photo_url || p.url || p.image_url) === legacyUrl)) {
+    out.unshift({ id: 'legacy', ticket_id: ticket.id, photo_url: legacyUrl, created_at: ticket.created_at });
   }
 
-  // Backward-compat: some installs used `url` instead of `photo_url`
-  return out.map(p => ({
-    ...p,
-    photo_url: p.photo_url || p.url || p.image_url || p.imageUrl || null
-  })).filter(p => !!p.photo_url);
+  // Normalize column names
+  return out
+    .map(p => ({
+      ...p,
+      photo_url: p.photo_url || p.url || p.image_url || p.imageUrl || p.photoUrl || null,
+    }))
+    .filter(p => !!p.photo_url);
+}
+
+async function fetchFromFirstWorkingTable(supabase, tableNames, selectCols, filterOr, orderCol = 'created_at') {
+  for (const tableName of tableNames) {
+    try {
+      let q = supabase.from(tableName).select(selectCols);
+      if (filterOr) q = q.or(filterOr);
+      if (orderCol) q = q.order(orderCol, { ascending: true });
+      const { data, error } = await q;
+      if (!error) return { table: tableName, data: data || [] };
+    } catch (e) {
+      // continue to next table
+    }
+  }
+  return { table: null, data: [] };
 }
 
 exports.handler = async (event) => {
@@ -67,42 +83,45 @@ exports.handler = async (event) => {
       };
     }
 
-    // Photos: try standard ticket_photos table first
-    let photos = [];
-    const { data: photosData, error: photosErr } = await supabase
-      .from('ticket_photos')
-      .select('*')
-      .eq('ticket_id', id)
-      .order('created_at', { ascending: true });
+    // Try multiple table/column naming conventions for photos
+    const photoTables = ['ticket_photos', 'ticketphotos', 'ticket_images', 'ticketimages'];
+    const photoFilterOr = `ticket_id.eq.${id},ticketId.eq.${id},ticketid.eq.${id}`;
+    const { data: photoRows } = await fetchFromFirstWorkingTable(
+      supabase,
+      photoTables,
+      '*',
+      photoFilterOr,
+      'created_at'
+    );
 
-    if (photosErr) {
-      console.error('ticket_photos error:', photosErr);
-    } else {
-      photos = photosData || [];
-    }
+    // Try multiple table/column naming conventions for comments
+    const commentTables = ['ticket_comments', 'ticketcomments', 'comments'];
+    const commentFilterOr = `ticket_id.eq.${id},ticketId.eq.${id},ticketid.eq.${id}`;
+    const { data: commentRows } = await fetchFromFirstWorkingTable(
+      supabase,
+      commentTables,
+      '*',
+      commentFilterOr,
+      'created_at'
+    );
 
-    // Comments (optional; table may not exist yet)
-    let comments = [];
-    const { data: commentsData, error: commentsErr } = await supabase
-      .from('ticket_comments')
-      .select('id, ticket_id, author, body, created_at')
-      .eq('ticket_id', id)
-      .order('created_at', { ascending: true });
+    const photos = normalizePhotos(ticket, photoRows);
 
-    if (commentsErr) {
-      console.error('ticket_comments error:', commentsErr);
-    } else {
-      comments = commentsData || [];
-    }
-
-    const normalized = normalizePhotos(ticket, photos);
+    // Normalize comments (author/body/created_at)
+    const comments = (commentRows || []).map(c => ({
+      id: c.id,
+      ticket_id: c.ticket_id || c.ticketId || c.ticketid || id,
+      author: c.author || c.tech_name || c.name || 'Unknown',
+      body: c.body || c.comment || c.text || '',
+      created_at: c.created_at || c.createdAt || null,
+    })).filter(c => c.body);
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ticket,
-        photos: normalized,
+        photos,
         comments,
       }),
     };

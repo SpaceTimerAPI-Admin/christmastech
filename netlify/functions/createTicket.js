@@ -1,16 +1,7 @@
 // netlify/functions/createTicket.js
-//
-// Creates a new ticket (photo REQUIRED) and performs a nearby-duplicate check.
-// If duplicates are found, returns { created:false, reason:'duplicates_found', duplicates:[...], draftTicket:{...} }
-//
-// Env vars needed:
-// - SUPABASE_URL
-// - SUPABASE_SERVICE_ROLE_KEY
-// - SUPABASE_BUCKET_NAME (default: ticket-photos)
-// - GROUPME_BOT_ID (optional, for announcements)
-// - GROUPME_BOT_POST_URL (optional, default: GroupMe bots/post)
-// - SITE_BASE_URL (optional, default: https://swoems.com)
-
+// Creates a ticket, REQUIRES a photo, and stores photo references in BOTH:
+// 1) ticket_photos (multi-photo table)
+// 2) tickets.photo_url (legacy/primary-photo fallback)
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -23,44 +14,60 @@ const groupmePostUrl =
   process.env.GROUPME_BOT_POST_URL || 'https://api.groupme.com/v3/bots/post';
 const siteBaseUrl = process.env.SITE_BASE_URL || 'https://swoems.com';
 
-// Duplicate check settings
-const DUPLICATE_RADIUS_METERS = 40; // nearby in the field
+// Duplicate config
+const DUPLICATE_RADIUS_METERS = 40;
 const DUPLICATE_LOOKBACK_DAYS = 3;
 
-// Haversine distance in meters
 function distanceMeters(lat1, lon1, lat2, lon2) {
   if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return Infinity;
-
   const R = 6371000;
   const toRad = (deg) => (deg * Math.PI) / 180;
-
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
 async function sendToGroupMe(text) {
   if (!groupmeBotId) return;
-
   try {
-    const res = await fetch(groupmePostUrl, {
+    await fetch(groupmePostUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bot_id: groupmeBotId, text }),
     });
-
-    if (!res.ok) console.error('GroupMe post failed:', res.status);
   } catch (err) {
     console.error('Error posting to GroupMe:', err);
   }
+}
+
+async function insertPhotoRow(supabase, ticketId, photoUrl) {
+  const tables = ['ticket_photos', 'ticketphotos', 'ticket_images', 'ticketimages'];
+  for (const tableName of tables) {
+    try {
+      // try typical column ticket_id
+      let { error } = await supabase.from(tableName).insert([{ ticket_id: ticketId, photo_url: photoUrl }]);
+      if (!error) return true;
+
+      // try alt column names
+      ({ error } = await supabase.from(tableName).insert([{ ticketId: ticketId, photo_url: photoUrl }]));
+      if (!error) return true;
+
+      ({ error } = await supabase.from(tableName).insert([{ ticketid: ticketId, photo_url: photoUrl }]));
+      if (!error) return true;
+
+      // try url column
+      ({ error } = await supabase.from(tableName).insert([{ ticket_id: ticketId, url: photoUrl }]));
+      if (!error) return true;
+    } catch (e) {
+      // continue
+    }
+  }
+  return false;
 }
 
 exports.handler = async (event) => {
@@ -75,33 +82,21 @@ exports.handler = async (event) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   let payload;
-  try {
-    payload = JSON.parse(event.body || '{}');
-  } catch (err) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
-  }
+  try { payload = JSON.parse(event.body || '{}'); }
+  catch { return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) }; }
 
-  const {
-    tech_name,
-    location_friendly,
-    description,
-    lat,
-    lon,
-    photoBase64,
-    photoFilename,
-    forceNew,
-  } = payload;
+  const { tech_name, location_friendly, description, lat, lon, photoBase64, photoFilename, forceNew } = payload;
 
   if (!tech_name || !location_friendly) {
     return { statusCode: 400, body: JSON.stringify({ error: 'tech_name and location_friendly are required' }) };
   }
 
-  // Photo REQUIRED for new tickets
+  // Require photo
   if (!photoBase64 || !photoFilename) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Photo is required to create a ticket' }) };
+    return { statusCode: 400, body: JSON.stringify({ error: 'Photo is required' }) };
   }
 
-  // 1) Duplicate check (only if we have coords and user is not forcing a new ticket)
+  // Duplicate check (only if we have lat/lon and not forcing new)
   let duplicates = [];
   if (lat != null && lon != null && !forceNew) {
     const since = new Date();
@@ -118,7 +113,9 @@ exports.handler = async (event) => {
       return { statusCode: 500, body: JSON.stringify({ error: 'Failed to fetch open tickets for duplicate check' }) };
     }
 
-    duplicates = (openTickets || []).filter((t) => distanceMeters(lat, lon, t.lat, t.lon) <= DUPLICATE_RADIUS_METERS);
+    if (openTickets?.length) {
+      duplicates = openTickets.filter((t) => distanceMeters(lat, lon, t.lat, t.lon) <= DUPLICATE_RADIUS_METERS);
+    }
 
     if (duplicates.length > 0) {
       return {
@@ -127,34 +124,24 @@ exports.handler = async (event) => {
           created: false,
           reason: 'duplicates_found',
           duplicates,
-          draftTicket: {
-            tech_name,
-            location_friendly,
-            description,
-            lat,
-            lon,
-          },
+          draftTicket: { tech_name, location_friendly, description, lat, lon },
         }),
       };
     }
   }
 
-  // 2) Upload the photo to Supabase Storage
+  // Upload photo to Storage
   let photoUrl = null;
   try {
-    const base64Parts = String(photoBase64).split(',');
+    const base64Parts = photoBase64.split(',');
     const base64Data = base64Parts.length === 2 ? base64Parts[1] : photoBase64;
-
     const buffer = Buffer.from(base64Data, 'base64');
-    const ext = (String(photoFilename).split('.').pop() || 'jpg').toLowerCase();
-    const path = `ticket-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
+    const ext = (photoFilename.split('.').pop() || 'jpg').toLowerCase();
+    const path = `ticket-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const contentType =
-      ext === 'jpg' || ext === 'jpeg'
-        ? 'image/jpeg'
-        : ext === 'png'
-        ? 'image/png'
-        : 'image/octet-stream';
+      (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' :
+      (ext === 'png') ? 'image/png' : 'application/octet-stream';
 
     const { error: uploadError } = await supabase.storage
       .from(bucketName)
@@ -162,34 +149,28 @@ exports.handler = async (event) => {
 
     if (uploadError) {
       console.error('Upload error:', uploadError);
-      return {
-        statusCode: 500,
-        body: JSON.stringify({
-          error: 'Failed to upload photo: ' + (uploadError.message || uploadError.error_description || 'unknown error'),
-        }),
-      };
+      return { statusCode: 500, body: JSON.stringify({ error: 'Failed to upload photo', details: uploadError.message || uploadError }) };
     }
 
     const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(path);
     photoUrl = publicUrlData.publicUrl;
   } catch (err) {
     console.error('Photo upload exception:', err);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Exception while uploading photo' }) };
+    return { statusCode: 500, body: JSON.stringify({ error: 'Exception while uploading photo', details: err.message || String(err) }) };
   }
 
-  // 3) Create ticket
+  // Create ticket (ensure photo_url fallback is set)
   const { data: ticket, error: ticketErr } = await supabase
     .from('tickets')
-    .insert([
-      {
-        tech_name,
-        location_friendly,
-        description: description || null,
-        lat: lat ?? null,
-        lon: lon ?? null,
-        status: 'open',
-      },
-    ])
+    .insert([{
+      tech_name,
+      location_friendly,
+      description: description || null,
+      lat: lat ?? null,
+      lon: lon ?? null,
+      status: 'open',
+      photo_url: photoUrl, // fallback/primary
+    }])
     .select()
     .single();
 
@@ -198,21 +179,18 @@ exports.handler = async (event) => {
     return { statusCode: 500, body: JSON.stringify({ error: 'Failed to create ticket' }) };
   }
 
-  // 4) Store photo record
-  const { error: photoErr } = await supabase.from('ticket_photos').insert([
-    {
-      ticket_id: ticket.id,
-      photo_url: photoUrl,
-    },
-  ]);
+  // Insert into photo table as well
+  const ok = await insertPhotoRow(supabase, ticket.id, photoUrl);
+  if (!ok) {
+    console.warn('Could not insert into a photo table; relying on tickets.photo_url fallback only.');
+  }
 
-  if (photoErr) console.error('Error inserting ticket photo:', photoErr);
-
-  // 5) Announce new ticket
-  const link = `${siteBaseUrl}/ticket.html?id=${ticket.id}`;
-  await sendToGroupMe(
-    `🎄 New lights ticket #${ticket.id} – ${location_friendly}\nReported by ${tech_name}\n${link}`
-  );
+  // Announce
+  const ticketLink = `${siteBaseUrl}/ticket.html?id=${ticket.id}`;
+  const msg = `🎄 New lights ticket #${ticket.id} – ${location_friendly}
+Reported by ${tech_name}
+${ticketLink}`;
+  await sendToGroupMe(msg);
 
   return { statusCode: 200, body: JSON.stringify({ created: true, ticketId: ticket.id }) };
 };
