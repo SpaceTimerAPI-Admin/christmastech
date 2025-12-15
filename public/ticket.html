@@ -4,40 +4,46 @@
   <meta charset="UTF-8" />
   <title>Ticket Details</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
+  />
+
   <style>
-    body { margin:0; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background:#050814; color:#f7f7f7; }
-    header { padding:0.75rem 1rem; background:#090f22; box-shadow:0 2px 6px rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:space-between;}
-    header a { color:#55d6ff; text-decoration:none; font-size:0.9rem; }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 1rem; }
-    .card { background:#11172a; border-radius:12px; padding: 1rem; margin-bottom: 1rem; box-shadow:0 4px 12px rgba(0,0,0,0.35); }
-    .row { display:flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
-    .pill { display:inline-block; padding:0.15rem 0.6rem; border-radius:999px; font-size:0.75rem; font-weight:700; text-transform:uppercase; }
-    .pill.open { background:#2ecc71; color:#000; }
-    .pill.fixed { background:#3498db; color:#000; }
-    .muted { color:#a7a7a7; font-size:0.9rem; }
-    .btn { border:0; border-radius:10px; padding:0.55rem 0.85rem; cursor:pointer; font-weight:700; }
-    .btn.primary { background:#55d6ff; color:#000; }
-    .btn.warn { background:#f1c40f; color:#000; }
-    .btn.good { background:#2ecc71; color:#000; }
-    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; }
-    img.photo { width:100%; border-radius:10px; border:1px solid #1e2640; }
-    textarea, input { width:100%; box-sizing:border-box; padding:0.6rem 0.7rem; border-radius:10px; border:1px solid #1e2640; background:#0b1022; color:#f7f7f7; }
-    label { font-size:0.85rem; color:#cfcfcf; display:block; margin-bottom:0.35rem; }
-    .comment { border-top: 1px solid #1e2640; padding-top: 0.75rem; margin-top: 0.75rem; }
-    .comment:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
-    .error { color:#ff9aa2; }
-    .ok { color:#a7ffb4; }
+    body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;background:#050814;color:#f7f7f7}
+    header{padding:.75rem 1rem;background:#090f22;box-shadow:0 2px 6px rgba(0,0,0,.6);display:flex;align-items:center;justify-content:space-between}
+    header a{color:#55d6ff;text-decoration:none;font-size:.9rem;margin-left:.75rem}
+    .wrap{max-width:980px;margin:0 auto;padding:1rem}
+    .card{background:#11172a;border-radius:12px;padding:1rem;margin-bottom:1rem;box-shadow:0 4px 12px rgba(0,0,0,.35)}
+    .row{display:flex;gap:1rem;flex-wrap:wrap;align-items:center}
+    .pill{display:inline-block;padding:.15rem .6rem;border-radius:999px;font-size:.75rem;font-weight:700;text-transform:uppercase}
+    .pill.open{background:#2ecc71;color:#000}
+    .pill.fixed{background:#3498db;color:#000}
+    .muted{color:#a7a7a7;font-size:.9rem}
+    .btn{border:0;border-radius:10px;padding:.55rem .85rem;cursor:pointer;font-weight:700}
+    .btn.good{background:#2ecc71;color:#000}
+    .btn.warn{background:#f1c40f;color:#000}
+    .btn.primary{background:#55d6ff;color:#000}
+    .btn.dark{background:#1e2640;color:#f7f7f7}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.75rem}
+    img.photo{width:100%;border-radius:10px;border:1px solid #1e2640}
+    textarea,input{width:100%;box-sizing:border-box;padding:.6rem .7rem;border-radius:10px;border:1px solid #1e2640;background:#0b1022;color:#f7f7f7}
+    label{font-size:.85rem;color:#cfcfcf;display:block;margin-bottom:.35rem}
+    .comment{border-top:1px solid #1e2640;padding-top:.75rem;margin-top:.75rem}
+    .comment:first-child{border-top:0;padding-top:0;margin-top:0}
+    .error{color:#ff9aa2}.ok{color:#a7ffb4}
+    #map { width: 100%; height: 340px; border-radius: 12px; border: 1px solid #1e2640; overflow:hidden; }
+    .map-actions a { color:#55d6ff; text-decoration:none; font-weight:700; }
   </style>
 </head>
 <body>
   <header>
+    <div><strong>Ticket Details</strong><span class="muted" id="ticketIdLabel"></span></div>
     <div>
-      <strong>Ticket Details</strong>
-      <span class="muted" id="ticketIdLabel"></span>
-    </div>
-    <div class="row" style="gap:0.75rem;">
-      <a href="/dashboard.html">Dashboard</a>
-      <a href="/new.html">+ New Ticket</a>
+      <a href="/dashboard">Dashboard</a>
+      <a href="/new">+ New Ticket</a>
     </div>
   </header>
 
@@ -47,39 +53,51 @@
     <div id="ticketCard" class="card" style="display:none;">
       <div class="row" style="justify-content:space-between;">
         <div>
-          <h2 style="margin:0 0 0.35rem 0;" id="locationFriendly"></h2>
+          <h2 style="margin:0 0 .35rem 0;" id="locationFriendly"></h2>
           <div class="muted" id="metaLine"></div>
         </div>
-        <div class="row">
-          <span id="statusPill" class="pill">status</span>
-        </div>
+        <span id="statusPill" class="pill"></span>
       </div>
 
-      <div style="margin-top:0.75rem;" class="muted" id="description"></div>
+      <div style="margin-top:.75rem;" class="muted" id="description"></div>
 
-      <div style="margin-top:0.9rem;" class="row">
+      <div style="margin-top:.9rem;" class="row">
         <button class="btn good" id="btnFix" style="display:none;">Mark Fixed</button>
-        <button class="btn warn" id="btnReopen" style="display:none;">Reopen (Unfix)</button>
+        <button class="btn warn" id="btnReopen" style="display:none;">Mark Unresolved (Reopen)</button>
+        <button class="btn dark" id="btnViewMap" style="display:none;">View Map</button>
+      </div>
+    </div>
+
+    <div id="mapCard" class="card" style="display:none;">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h3 style="margin:0;">Location</h3>
+        <div class="map-actions">
+          <a id="openInMaps" href="#" target="_blank" rel="noopener noreferrer" style="display:none;">Open in Google Maps</a>
+        </div>
+      </div>
+      <div style="margin-top:.75rem;">
+        <div id="map"></div>
+        <div class="muted" style="margin-top:.5rem;" id="coordsLine"></div>
       </div>
     </div>
 
     <div id="photosCard" class="card" style="display:none;">
-      <h3 style="margin:0 0 0.75rem 0;">Photos</h3>
+      <h3 style="margin:0 0 .75rem 0;">Photos</h3>
       <div id="photoGrid" class="grid"></div>
     </div>
 
     <div id="commentsCard" class="card" style="display:none;">
-      <h3 style="margin:0 0 0.75rem 0;">Comments / Updates</h3>
+      <h3 style="margin:0 0 .75rem 0;">Comments / Updates</h3>
 
-      <div class="row" style="margin-bottom:0.75rem;">
-        <div style="flex:1; min-width:240px;">
+      <div class="row" style="margin-bottom:.75rem;">
+        <div style="flex:1;min-width:240px;">
           <label for="commentAuthor">Your name</label>
-          <input id="commentAuthor" placeholder="e.g. Anthony" />
+          <input id="commentAuthor" placeholder="e.g. Samuel" />
         </div>
       </div>
 
-      <div class="row" style="margin-bottom:0.75rem;">
-        <div style="flex:1; min-width:240px;">
+      <div class="row" style="margin-bottom:.75rem;">
+        <div style="flex:1;min-width:240px;">
           <label for="commentBody">Add an update</label>
           <textarea id="commentBody" rows="3" placeholder="What changed? What did you test? Any parts needed?"></textarea>
         </div>
@@ -89,181 +107,203 @@
         <button class="btn primary" id="btnAddComment">Post Comment</button>
       </div>
 
-      <div id="commentPostMsg" class="muted" style="margin-top:0.75rem;"></div>
-
+      <div id="commentPostMsg" class="muted" style="margin-top:.75rem;"></div>
       <div style="margin-top:1rem;" id="commentList"></div>
     </div>
   </div>
 
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin=""
+  ></script>
+
   <script>
-    const statusMsg = document.getElementById('statusMsg');
-    const ticketCard = document.getElementById('ticketCard');
-    const photosCard = document.getElementById('photosCard');
-    const commentsCard = document.getElementById('commentsCard');
+    const qs=new URLSearchParams(location.search);
+    const ticketId=qs.get('id');
 
-    const ticketIdLabel = document.getElementById('ticketIdLabel');
-    const locationFriendly = document.getElementById('locationFriendly');
-    const metaLine = document.getElementById('metaLine');
-    const descriptionEl = document.getElementById('description');
-    const statusPill = document.getElementById('statusPill');
+    const statusMsg=document.getElementById('statusMsg');
+    const ticketCard=document.getElementById('ticketCard');
+    const photosCard=document.getElementById('photosCard');
+    const commentsCard=document.getElementById('commentsCard');
+    const mapCard=document.getElementById('mapCard');
 
-    const btnFix = document.getElementById('btnFix');
-    const btnReopen = document.getElementById('btnReopen');
+    const ticketIdLabel=document.getElementById('ticketIdLabel');
+    const locationFriendly=document.getElementById('locationFriendly');
+    const metaLine=document.getElementById('metaLine');
+    const descriptionEl=document.getElementById('description');
+    const statusPill=document.getElementById('statusPill');
 
-    const photoGrid = document.getElementById('photoGrid');
+    const btnFix=document.getElementById('btnFix');
+    const btnReopen=document.getElementById('btnReopen');
+    const btnViewMap=document.getElementById('btnViewMap');
 
-    const commentAuthor = document.getElementById('commentAuthor');
-    const commentBody = document.getElementById('commentBody');
-    const btnAddComment = document.getElementById('btnAddComment');
-    const commentList = document.getElementById('commentList');
-    const commentPostMsg = document.getElementById('commentPostMsg');
+    const photoGrid=document.getElementById('photoGrid');
 
-    const qs = new URLSearchParams(location.search);
-    const ticketId = qs.get('id');
+    const commentAuthor=document.getElementById('commentAuthor');
+    const commentBody=document.getElementById('commentBody');
+    const btnAddComment=document.getElementById('btnAddComment');
+    const commentList=document.getElementById('commentList');
+    const commentPostMsg=document.getElementById('commentPostMsg');
 
-    const savedName = localStorage.getItem('ticket_comment_author');
-    if (savedName) commentAuthor.value = savedName;
+    const openInMaps=document.getElementById('openInMaps');
+    const coordsLine=document.getElementById('coordsLine');
 
-    function esc(s) {
-      return (s ?? '').toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+    const savedName=localStorage.getItem('ticket_comment_author');
+    if(savedName) commentAuthor.value=savedName;
+
+    function esc(s){return (s??'').toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');}
+
+    function setPill(status){
+      status=(status||'open').toLowerCase();
+      statusPill.className='pill '+status;
+      statusPill.textContent=status;
+      btnFix.style.display=status==='open'?'inline-block':'none';
+      btnReopen.style.display=status==='fixed'?'inline-block':'none';
     }
 
-    function setPill(status) {
-      statusPill.className = 'pill ' + status;
-      statusPill.textContent = status;
-      btnFix.style.display = status === 'open' ? 'inline-block' : 'none';
-      btnReopen.style.display = status === 'fixed' ? 'inline-block' : 'none';
-    }
-
-    async function fetchJson(url, opts) {
-      const res = await fetch(url, opts);
-      const ct = res.headers.get('content-type') || '';
-      const isJson = ct.includes('application/json');
-      if (!res.ok) {
-        let details = '';
-        try { details = isJson ? ((await res.json()).error || '') : await res.text(); } catch {}
-        throw new Error(`HTTP ${res.status}: ${details || res.statusText}`);
+    async function fetchJson(url,opts){
+      const res=await fetch(url,opts);
+      const ct=res.headers.get('content-type')||'';
+      const isJson=ct.includes('application/json');
+      if(!res.ok){
+        let details='';
+        try{details=isJson?(await res.json()).error:await res.text();}catch{}
+        throw new Error('HTTP '+res.status+': '+(details||res.statusText));
       }
-      if (!isJson) throw new Error('Expected JSON response but got: ' + ct);
+      if(!isJson) throw new Error('Expected JSON but got '+ct);
       return await res.json();
     }
 
-    async function loadTicket() {
-      if (!ticketId) {
-        statusMsg.innerHTML = '<span class="error">Missing ticket id in URL. Use /ticket.html?id=123</span>';
-        return;
+    let map=null;
+    let marker=null;
+
+    function initOrUpdateMap(lat, lon, title){
+      if(!map){
+        map = L.map('map', { zoomControl: true }).setView([lat, lon], 18);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+      } else {
+        map.setView([lat, lon], 18);
       }
 
-      ticketIdLabel.textContent = ` (#${ticketId})`;
-      statusMsg.textContent = 'Loading ticket...';
+      if(marker){
+        marker.setLatLng([lat, lon]);
+      } else {
+        marker = L.marker([lat, lon]).addTo(map);
+      }
+      marker.bindPopup(title || 'Ticket location').openPopup();
 
-      try {
-        const data = await fetchJson(`/.netlify/functions/getTicket?id=${encodeURIComponent(ticketId)}`);
-        const t = data.ticket;
+      // Leaflet needs a resize after showing hidden container
+      setTimeout(()=>{ try{ map.invalidateSize(); }catch{} }, 150);
+    }
 
-        locationFriendly.textContent = t.location_friendly || '(no location)';
-        const created = t.created_at ? new Date(t.created_at).toLocaleString() : '';
-        metaLine.textContent = `Reported by ${t.tech_name || 'Unknown'}${created ? ' on ' + created : ''}`;
-        descriptionEl.textContent = t.description || '';
-        setPill((t.status || 'open').toLowerCase());
+    async function loadTicket(){
+      if(!ticketId){statusMsg.innerHTML='<span class="error">Missing ticket id.</span>';return;}
+      ticketIdLabel.textContent=' (#'+ticketId+')';
+      statusMsg.textContent='Loading ticket...';
 
-        ticketCard.style.display = 'block';
+      try{
+        const data=await fetchJson('/.netlify/functions/getTicket?id='+encodeURIComponent(ticketId));
+        const t=data.ticket;
 
-        // Photos
-        photoGrid.innerHTML = '';
-        const photos = data.photos || [];
-        if (photos.length > 0) {
-          photos.forEach(p => {
-            const url = p.photo_url || p.url || p.image_url;
-            if (!url) return;
-            const a = document.createElement('a');
-            a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
-            const img = document.createElement('img');
-            img.className = 'photo'; img.src = url; img.alt = 'Ticket photo';
-            a.appendChild(img);
-            photoGrid.appendChild(a);
-          });
-          photosCard.style.display = 'block';
+        locationFriendly.textContent=t.location_friendly||'(no location)';
+        const created=t.created_at?new Date(t.created_at).toLocaleString():'';
+        metaLine.textContent='Reported by '+(t.tech_name||'Unknown')+(created?' on '+created:'');
+        descriptionEl.textContent=t.description||'';
+        setPill(t.status);
+
+        ticketCard.style.display='block';
+
+        // Map
+        const hasCoords = (t.lat != null && t.lon != null);
+        if(hasCoords){
+          btnViewMap.style.display='inline-block';
+          mapCard.style.display='none'; // starts hidden until click
+          const gmaps = `https://www.google.com/maps?q=${encodeURIComponent(t.lat + ',' + t.lon)}`;
+          openInMaps.href = gmaps;
+          openInMaps.style.display = 'inline-block';
+          coordsLine.textContent = `GPS: ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)}`;
+
+          btnViewMap.onclick = () => {
+            mapCard.style.display = 'block';
+            // Scroll into view
+            mapCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            initOrUpdateMap(t.lat, t.lon, `Ticket #${t.id} – ${t.location_friendly || ''}`);
+          };
         } else {
-          photosCard.style.display = 'none';
+          btnViewMap.style.display='none';
+          mapCard.style.display='none';
         }
 
-        renderComments(data.comments || []);
-        commentsCard.style.display = 'block';
+        // Photos
+        photoGrid.innerHTML='';
+        const photos=data.photos||[];
+        if(photos.length){
+          for(const p of photos){
+            const url=p.photo_url||p.url||p.image_url;
+            if(!url) continue;
+            const a=document.createElement('a');
+            a.href=url; a.target='_blank'; a.rel='noopener noreferrer';
+            const img=document.createElement('img');
+            img.className='photo'; img.src=url; img.alt='Ticket photo';
+            a.appendChild(img); photoGrid.appendChild(a);
+          }
+          photosCard.style.display='block';
+        } else {
+          photosCard.style.display='none';
+        }
 
-        statusMsg.textContent = '';
-      } catch (err) {
+        renderComments(data.comments||[]);
+        commentsCard.style.display='block';
+        statusMsg.textContent='';
+      }catch(err){
         console.error(err);
-        statusMsg.innerHTML = `<span class="error">Network error loading ticket. ${esc(err.message)}</span>`;
-        ticketCard.style.display = 'none';
-        photosCard.style.display = 'none';
-        commentsCard.style.display = 'none';
+        statusMsg.innerHTML='<span class="error">Network error loading ticket. '+esc(err.message)+'</span>';
+        ticketCard.style.display='none'; photosCard.style.display='none'; commentsCard.style.display='none'; mapCard.style.display='none';
       }
     }
 
-    function renderComments(comments) {
-      if (!comments || comments.length === 0) {
-        commentList.innerHTML = '<div class="muted">No comments yet.</div>';
-        return;
-      }
-      commentList.innerHTML = comments.map(c => {
-        const when = c.created_at ? new Date(c.created_at).toLocaleString() : '';
-        return `
-          <div class="comment">
-            <div><strong>${esc(c.author || 'Unknown')}</strong> <span class="muted">${esc(when)}</span></div>
-            <div style="margin-top:0.25rem;">${esc(c.body || '')}</div>
-          </div>
-        `;
+    function renderComments(comments){
+      if(!comments.length){commentList.innerHTML='<div class="muted">No comments yet.</div>';return;}
+      commentList.innerHTML=comments.map(c=>{
+        const when=c.created_at?new Date(c.created_at).toLocaleString():'';
+        return '<div class="comment"><div><strong>'+esc(c.author||'Unknown')+'</strong> <span class="muted">'+esc(when)+'</span></div><div style="margin-top:.25rem;">'+esc(c.body||'')+'</div></div>';
       }).join('');
     }
 
-    async function updateStatus(newStatus) {
-      if (!ticketId) return;
-      const actor = (commentAuthor.value || '').trim();
-      try {
-        statusMsg.textContent = 'Updating status...';
-        await fetchJson('/.netlify/functions/updateTicketStatus', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: ticketId, status: newStatus, actor })
-        });
+    async function updateStatus(newStatus){
+      try{
+        statusMsg.textContent='Updating status...';
+        await fetchJson('/.netlify/functions/updateTicketStatus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:ticketId,status:newStatus})});
         await loadTicket();
-      } catch (err) {
-        console.error(err);
-        statusMsg.innerHTML = `<span class="error">Failed to update status. ${esc(err.message)}</span>`;
+      }catch(err){
+        statusMsg.innerHTML='<span class="error">Failed to update status. '+esc(err.message)+'</span>';
       }
     }
 
-    btnFix.addEventListener('click', () => updateStatus('fixed'));
-    btnReopen.addEventListener('click', () => updateStatus('open'));
+    btnFix.addEventListener('click',()=>updateStatus('fixed'));
+    btnReopen.addEventListener('click',()=>updateStatus('open'));
 
-    btnAddComment.addEventListener('click', async () => {
-      const author = (commentAuthor.value || '').trim();
-      const body = (commentBody.value || '').trim();
+    btnAddComment.addEventListener('click',async()=>{
+      const author=(commentAuthor.value||'').trim();
+      const body=(commentBody.value||'').trim();
+      if(!author){commentPostMsg.innerHTML='<span class="error">Please enter your name.</span>';return;}
+      if(!body){commentPostMsg.innerHTML='<span class="error">Please enter a comment.</span>';return;}
+      localStorage.setItem('ticket_comment_author',author);
 
-      if (!author) { commentPostMsg.innerHTML = '<span class="error">Please enter your name.</span>'; return; }
-      if (!body) { commentPostMsg.innerHTML = '<span class="error">Please enter a comment.</span>'; return; }
-
-      localStorage.setItem('ticket_comment_author', author);
-
-      try {
-        btnAddComment.disabled = true;
-        commentPostMsg.textContent = 'Posting...';
-
-        await fetchJson('/.netlify/functions/addComment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ticket_id: Number(ticketId), author, body })
-        });
-
-        commentBody.value = '';
-        commentPostMsg.innerHTML = '<span class="ok">Comment posted.</span>';
+      try{
+        btnAddComment.disabled=true;
+        commentPostMsg.textContent='Posting...';
+        await fetchJson('/.netlify/functions/addComment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticket_id:Number(ticketId),author,body})});
+        commentBody.value='';
+        commentPostMsg.innerHTML='<span class="ok">Comment posted.</span>';
         await loadTicket();
-      } catch (err) {
-        console.error(err);
-        commentPostMsg.innerHTML = `<span class="error">Failed to post. ${esc(err.message)}</span>`;
-      } finally {
-        btnAddComment.disabled = false;
+      }catch(err){
+        commentPostMsg.innerHTML='<span class="error">Failed to post. '+esc(err.message)+'</span>';
+      }finally{
+        btnAddComment.disabled=false;
       }
     });
 
