@@ -1,31 +1,19 @@
 // netlify/functions/send5pmReport.js
-// Sends the 5pm report to GroupMe with the requested formatting and prioritization.
+// Formatted 5pm report + correct links using SITE_BASE_URL.
+// Also safe to call manually from /report in GroupMe.
 const { createClient } = require('@supabase/supabase-js');
+const { sendToGroupMe, chunkText, siteBaseUrl } = require('./_lib');
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const groupmeBotId = process.env.GROUPME_BOT_ID;
-const groupmePostUrl = process.env.GROUPME_BOT_POST_URL || 'https://api.groupme.com/v3/bots/post';
-const siteBaseUrl = process.env.SITE_BASE_URL || 'https://swoems.com';
-
-async function sendToGroupMe(text) {
-  if (!groupmeBotId) return;
-  await fetch(groupmePostUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ bot_id: groupmeBotId, text }),
-  });
-}
-
-function fmtTicketLine(t) {
-  const created = t.created_at ? new Date(t.created_at).toLocaleString() : '';
-  return `• #${t.id} — ${t.location_friendly || '(no location)'}${created ? ` (${created})` : ''}\n  ${siteBaseUrl}/ticket.html?id=${t.id}`;
+function fmtDate(iso) {
+  try { return new Date(iso).toLocaleString(); } catch { return iso; }
 }
 
 exports.handler = async () => {
   if (!supabaseUrl || !supabaseServiceKey) {
-    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Supabase env vars are not set' }) };
+    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Supabase env vars missing' }) };
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -43,46 +31,59 @@ exports.handler = async () => {
   const openTickets = tickets || [];
   const ids = openTickets.map(t => t.id);
 
-  const commentCounts = new Map();
+  // Any ticket with at least one comment is considered "has updates"
+  let commented = new Set();
   if (ids.length) {
-    const { data: comments } = await supabase
+    const { data: comments, error: cErr } = await supabase
       .from('ticket_comments')
       .select('ticket_id')
       .in('ticket_id', ids);
 
-    (comments || []).forEach(c => {
-      commentCounts.set(c.ticket_id, (commentCounts.get(c.ticket_id) || 0) + 1);
-    });
+    if (!cErr && comments) {
+      for (const c of comments) commented.add(c.ticket_id);
+    }
   }
 
-  const priority = openTickets
-    .filter(t => (commentCounts.get(t.id) || 0) === 0)
-    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const priority = openTickets.filter(t => !commented.has(t.id)); // open, no comments
+  const updated = openTickets.filter(t => commented.has(t.id));  // open, has comments
 
-  const updated = openTickets
-    .filter(t => (commentCounts.get(t.id) || 0) > 0)
-    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const newLink = `${siteBaseUrl}/new`;
+  const dashLink = `${siteBaseUrl}/dashboard`;
 
-  const header =
-`🕔 5pm Report — Please prioritize the below list of tickets within the next Walk Around
+  const lines = [];
+  lines.push('🎄 5pm Report- Please priortize the below list of tickets within the next Walk Around');
+  lines.push('');
+  lines.push(`Submit a new ticket: ${newLink}`);
+  lines.push('');
+  lines.push('Ticket system guidance:');
+  lines.push('- The ticket system is used for issues found in the park that troubleshooting did not fix.');
+  lines.push('- Always try to fix the issue before making a ticket.');
+  lines.push('');
 
-Submit a new ticket: ${siteBaseUrl}/new
+  lines.push('=== Priority Tickets (Open • No comments/updates yet) ===');
+  if (!priority.length) {
+    lines.push('None ✅');
+  } else {
+    for (const t of priority) {
+      lines.push(`- #${t.id} • ${t.location_friendly || '(no location)'} • ${fmtDate(t.created_at)} • ${siteBaseUrl}/ticket.html?id=${t.id}`);
+    }
+  }
 
-Ticket system is used for issues found in the park that troubleshooting did not fix.
-Always try to fix the issue before making a ticket.`;
+  lines.push('');
+  lines.push('=== Open Tickets (With comments/updates) ===');
+  if (!updated.length) {
+    lines.push('None ✅');
+  } else {
+    for (const t of updated) {
+      lines.push(`- #${t.id} • ${t.location_friendly || '(no location)'} • ${fmtDate(t.created_at)} • ${siteBaseUrl}/ticket.html?id=${t.id}`);
+    }
+  }
 
-  const section1 =
-`\n\n🚨 PRIORITY — Open tickets with NO comments/updates (oldest → newest)
-${priority.length ? priority.map(fmtTicketLine).join('\n\n') : '• None 🎉'}`;
+  lines.push('');
+  lines.push(`To view all open tickets and view the map, visit ${dashLink}.`);
 
-  const section2 =
-`\n\n🧾 Open tickets WITH comments/updates (oldest → newest)
-${updated.length ? updated.map(fmtTicketLine).join('\n\n') : '• None'}`;
+  const msg = lines.join('\n');
+  for (const chunk of chunkText(msg, 900)) await sendToGroupMe(chunk);
 
-  const footer =
-`\n\nTo view all open tickets and view the map, visit ${siteBaseUrl}/dashboard.`;
-
-  await sendToGroupMe(header + section1 + section2 + footer);
-
-  return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, open: openTickets.length, priority: priority.length, updated: updated.length }) };
+  return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, openCount: openTickets.length, priorityCount: priority.length, updatedCount: updated.length, siteBaseUrl }) };
 };

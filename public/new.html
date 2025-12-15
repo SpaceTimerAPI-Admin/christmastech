@@ -2,384 +2,162 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>New Lights Ticket</title>
+  <title>New Ticket</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      padding: 1rem;
-      background: #050814;
-      color: #f7f7f7;
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 0.5rem;
-    }
-    .subtitle {
-      text-align: center;
-      font-size: 0.85rem;
-      color: #aaa;
-      margin-bottom: 1rem;
-    }
-    form {
-      max-width: 480px;
-      margin: 0 auto;
-      background: #11172a;
-      padding: 1rem;
-      border-radius: 12px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.6);
-    }
-    label {
-      display: block;
-      margin-top: 0.75rem;
-      font-size: 0.9rem;
-    }
-    input[type="text"],
-    textarea {
-      width: 100%;
-      padding: 0.5rem;
-      border-radius: 8px;
-      border: 1px solid #444;
-      margin-top: 0.25rem;
-      font-size: 1rem;
-      box-sizing: border-box;
-      background: #050814;
-      color: #f7f7f7;
-    }
-    textarea {
-      min-height: 80px;
-      resize: vertical;
-    }
-    input[type="file"] {
-      margin-top: 0.5rem;
-      color: #ddd;
-    }
-    button {
-      margin-top: 1rem;
-      width: 100%;
-      padding: 0.75rem;
-      border-radius: 999px;
-      border: none;
-      background: #2ecc71;
-      color: #000;
-      font-weight: 700;
-      font-size: 1rem;
-      cursor: pointer;
-    }
-    button:disabled {
-      background: #555;
-      color: #ccc;
-      cursor: default;
-    }
-    .small {
-      font-size: 0.8rem;
-      color: #aaa;
-    }
-    #status {
-      margin-top: 1rem;
-      font-size: 0.9rem;
-    }
-    .duplicate-card {
-      background: #1b2338;
-      border-radius: 8px;
-      padding: 0.5rem 0.75rem;
-      margin-top: 0.5rem;
-      font-size: 0.85rem;
-    }
-    .duplicate-card strong {
-      color: #ffd166;
-    }
-    .dup-buttons {
-      display: flex;
-      gap: 0.5rem;
-      margin-top: 0.5rem;
-    }
-    .dup-buttons button {
-      flex: 1;
-      font-size: 0.75rem;
-      padding: 0.5rem;
-    }
-    a {
-      color: #55d6ff;
-    }
+    body { margin:0; font-family: system-ui,-apple-system,BlinkMacSystemFont,sans-serif; background:#050814; color:#f7f7f7; }
+    header { padding:0.75rem 1rem; background:#090f22; box-shadow:0 2px 6px rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:space-between;}
+    header a { color:#55d6ff; text-decoration:none; font-size:0.9rem; }
+    .wrap { max-width: 720px; margin:0 auto; padding:1rem; }
+    .card { background:#11172a; border-radius:12px; padding: 1rem; box-shadow:0 4px 12px rgba(0,0,0,0.35); }
+    label { display:block; color:#cfcfcf; font-size:0.9rem; margin:0.75rem 0 0.35rem; }
+    input, textarea { width:100%; box-sizing:border-box; padding:0.65rem 0.75rem; border-radius:10px; border:1px solid #1e2640; background:#0b1022; color:#f7f7f7; }
+    textarea { min-height: 110px; resize: vertical; }
+    .btn { margin-top: 1rem; width:100%; border:0; border-radius:14px; padding:0.9rem 1rem; font-weight:800; font-size:1.05rem; cursor:pointer; background:#2ecc71; color:#000; }
+    .muted { color:#a7a7a7; font-size:0.9rem; margin-top:0.5rem; }
+    .error { color:#ff9aa2; }
+    .ok { color:#a7ffb4; }
   </style>
 </head>
 <body>
-  <h1>New Lights Ticket</h1>
-  <div class="subtitle">Use this when you <strong>cannot restore</strong> a lights issue in the park.</div>
+  <header>
+    <strong>Create Ticket</strong>
+    <div><a href="/dashboard">Dashboard</a></div>
+  </header>
 
-  <form id="ticketForm">
-    <label>
-      Your Name
-      <input type="text" id="tech_name" required placeholder="e.g. Anthony" />
-    </label>
+  <div class="wrap">
+    <div class="card">
+      <div class="muted">Use this when you <strong>cannot</strong> restore a lights issue in the park.</div>
 
-    <label>
-      Friendly Location Name
-      <span class="small">(e.g. “Main Gate Tree”, “Penguin Exhibit Archway”)</span>
-      <input type="text" id="location_friendly" required />
-    </label>
+      <label>Your Name</label>
+      <input id="tech_name" placeholder="e.g. Adam" />
 
-    <label>
-      Description of Issue
-      <span class="small">(what's wrong, what you already tried, etc.)</span>
-      <textarea id="description"></textarea>
-    </label>
+      <label>Friendly Location Name</label>
+      <input id="location_friendly" placeholder='e.g. "Main Gate Tree"' />
 
-    <label>
-      Photo of Issue
-      <span class="small">(required)</span>
-      <input type="file" id="photo" accept="image/*" capture="environment"  required />
-    </label>
+      <label>Description of Issue</label>
+      <textarea id="description" placeholder="What's wrong, what you already tried, etc."></textarea>
 
-    <!-- hidden fields for geo -->
-    <input type="hidden" id="lat" />
-    <input type="hidden" id="lon" />
+      <label>Photo of Issue (required)</label>
+      <input id="photo" type="file" accept="image/*" />
 
-    <button type="submit" id="submitBtn">Submit Ticket</button>
-
-    <div id="status"></div>
-  </form>
+      <button id="submitBtn" class="btn">Submit Ticket</button>
+      <div id="msg" class="muted"></div>
+    </div>
+  </div>
 
   <script>
-    let currentLat = null;
-    let currentLon = null;
-    let lastPayload = null;
-
-    const statusEl = document.getElementById('status');
-    const form = document.getElementById('ticketForm');
+    const msg = document.getElementById('msg');
     const submitBtn = document.getElementById('submitBtn');
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          currentLat = pos.coords.latitude;
-          currentLon = pos.coords.longitude;
-          document.getElementById('lat').value = currentLat;
-          document.getElementById('lon').value = currentLon;
-        },
-        (err) => {
-          console.warn('Geo error:', err);
-          statusEl.textContent = 'Warning: unable to get GPS. Ticket will save but duplicate check may be less accurate.';
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
-      );
-    } else {
-      statusEl.textContent = 'Geolocation not supported on this device.';
+    function setMsg(text, cls='muted') {
+      msg.className = cls;
+      msg.textContent = text;
     }
 
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+    async function getCoordsSafe(timeoutMs=6000) {
+      if (!navigator.geolocation) return null;
+      return await new Promise((resolve) => {
+        let done=false;
+        const timer=setTimeout(()=>{ if(done) return; done=true; resolve(null); }, timeoutMs);
+        navigator.geolocation.getCurrentPosition(
+          (pos)=>{ if(done) return; done=true; clearTimeout(timer); resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }); },
+          ()=>{ if(done) return; done=true; clearTimeout(timer); resolve(null); },
+          { enableHighAccuracy:true, timeout: timeoutMs, maximumAge: 60000 }
+        );
       });
     }
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
+    // Compress image client-side to avoid upload failures on large photos (common on iPhone).
+    async function compressImage(file, maxDim=1600, quality=0.78) {
+      const bitmap = await createImageBitmap(file);
+      const width = bitmap.width;
+      const height = bitmap.height;
+      const scale = Math.min(1, maxDim / Math.max(width, height));
+      const w = Math.round(width * scale);
+      const h = Math.round(height * scale);
 
-      const tech_name = document.getElementById('tech_name').value.trim();
-      const location_friendly = document.getElementById('location_friendly').value.trim();
-      const description = document.getElementById('description').value.trim();
-      const photoInput = document.getElementById('photo');
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0, w, h);
 
-      if (!tech_name || !location_friendly) {
-        statusEl.textContent = 'Name and friendly location are required.';
+      return await new Promise((resolve) => {
+        canvas.toBlob((blob) => resolve(blob), 'image/jpeg', quality);
+      });
+    }
+
+    async function fetchJson(url, opts) {
+      const res = await fetch(url, opts);
+      const ct = res.headers.get('content-type') || '';
+      const isJson = ct.includes('application/json');
+      if (!res.ok) {
+        let details = '';
+        try { details = isJson ? (await res.json()).error : await res.text(); } catch {}
+        throw new Error(details || (res.status + ' ' + res.statusText));
+      }
+      return isJson ? await res.json() : {};
+    }
+
+    submitBtn.addEventListener('click', async () => {
+      const tech_name = (document.getElementById('tech_name').value || '').trim();
+      const location_friendly = (document.getElementById('location_friendly').value || '').trim();
+      const description = (document.getElementById('description').value || '').trim();
+      const file = document.getElementById('photo').files[0];
+
+      if (!tech_name || !location_friendly || !description) {
+        setMsg('Please fill in name, location, and description.', 'error');
         return;
       }
-
-      if (!photoInput.files || photoInput.files.length === 0) {
-        statusEl.textContent = 'Photo is required.';
+      if (!file) {
+        setMsg('Photo is required.', 'error');
         return;
       }
 
       submitBtn.disabled = true;
-      statusEl.textContent = 'Submitting ticket...';
-
-      let photoBase64 = null;
-      let photoFilename = null;
-
-      if (photoInput.files && photoInput.files[0]) {
-        const file = photoInput.files[0];
-        photoBase64 = await fileToBase64(file);
-        photoFilename = file.name || 'photo.jpg';
-      }
-
-      const payload = {
-        tech_name,
-        location_friendly,
-        description,
-        lat: currentLat,
-        lon: currentLon,
-        photoBase64,
-        photoFilename,
-        forceNew: false
-      };
-
-      lastPayload = payload;
+      setMsg('Submitting...');
 
       try {
-        const res = await fetch('/.netlify/functions/createTicket', {
+        const coords = await getCoordsSafe();
+        const compressed = await compressImage(file);
+        const photoBlob = compressed || file;
+
+        const arrayBuffer = await photoBlob.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = '';
+        for (let i=0; i<bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const base64 = btoa(binary);
+
+        const uploadRes = await fetchJson('/.netlify/functions/uploadPhoto', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ base64, contentType: 'image/jpeg' })
         });
 
-        const data = await res.json();
+        const photo_path = uploadRes.path || uploadRes.file || uploadRes.filename;
 
-        if (data.error) {
-          statusEl.textContent = 'Error: ' + data.error;
-          submitBtn.disabled = false;
-          return;
-        }
-
-        if (data.created) {
-          const link = `/ticket.html?id=${encodeURIComponent(data.ticketId)}`;
-          statusEl.innerHTML = `
-            ✅ Ticket created.<br/>
-            <a href="${link}">Open ticket #${data.ticketId}</a>
-          `;
-          form.reset();
-          submitBtn.disabled = false;
-          return;
-        }
-
-        if (!data.created && data.reason === 'duplicates_found') {
-          renderDuplicateOptions(data.duplicates);
-          submitBtn.disabled = false;
-          return;
-        }
-
-        statusEl.textContent = 'Unexpected response from server.';
-        submitBtn.disabled = false;
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = 'Network error; could not submit ticket.';
-        submitBtn.disabled = false;
-      }
-    });
-
-    function renderDuplicateOptions(duplicates) {
-      if (!duplicates || duplicates.length === 0) {
-        statusEl.textContent = 'Server reported duplicates but none were returned.';
-        return;
-      }
-
-      let html = '<p>We found possible existing ticket(s) near this location:</p>';
-      duplicates.forEach((t) => {
-        const created = new Date(t.created_at).toLocaleString();
-        html += `
-          <div class="duplicate-card">
-            <div><strong>Ticket #${t.id}</strong> – ${t.location_friendly}</div>
-            <div class="small">
-              Reported by ${t.tech_name || 'Unknown'} on ${created}<br/>
-              Status: ${t.status}
-            </div>
-            <div class="small">Description: ${t.description || '(none)'} </div>
-            <div class="dup-buttons">
-              <button type="button" onclick="attachToExisting(${t.id})">
-                Attach my photo/notes to #${t.id}
-              </button>
-              <button type="button" onclick="createNewAnyway()">
-                Create new ticket anyway
-              </button>
-            </div>
-          </div>
-        `;
-      });
-
-      statusEl.innerHTML = html;
-    }
-
-    async function attachToExisting(ticketId) {
-      if (!lastPayload) {
-        statusEl.textContent = 'Missing payload for attachment.';
-        return;
-      }
-
-      statusEl.textContent = `Attaching to ticket #${ticketId}...`;
-      submitBtn.disabled = true;
-
-      try {
-        const res = await fetch('/.netlify/functions/attachToTicket', {
+        const createRes = await fetchJson('/.netlify/functions/createTicket', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
-            ticketId,
-            tech_name: lastPayload.tech_name,
-            description: lastPayload.description,
-            lat: lastPayload.lat,
-            lon: lastPayload.lon,
-            photoBase64: lastPayload.photoBase64,
-            photoFilename: lastPayload.photoFilename
+            tech_name, location_friendly, description,
+            lat: coords ? coords.lat : null,
+            lon: coords ? coords.lon : null,
+            photo_path
           })
         });
 
-        const data = await res.json();
-        if (data.error) {
-          statusEl.textContent = 'Error: ' + data.error;
-          submitBtn.disabled = false;
-          return;
-        }
-
-        const link = `/ticket.html?id=${encodeURIComponent(ticketId)}`;
-        statusEl.innerHTML = `
-          ✅ Attached your info to ticket #${ticketId}.<br/>
-          <a href="${link}">Open ticket #${ticketId}</a>
-        `;
-        form.reset();
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = 'Network error while attaching to ticket.';
+        const id = createRes.id || (createRes.ticket && createRes.ticket.id);
+        setMsg('Ticket created successfully.', 'ok');
+        if (id) location.href = '/ticket.html?id=' + id;
+      } catch (e) {
+        console.error(e);
+        setMsg('Could not submit ticket: ' + (e.message || e), 'error');
       } finally {
         submitBtn.disabled = false;
       }
-    }
-
-    async function createNewAnyway() {
-      if (!lastPayload) {
-        statusEl.textContent = 'Missing payload for creating a new ticket.';
-        return;
-      }
-
-      statusEl.textContent = 'Creating new ticket anyway...';
-      submitBtn.disabled = true;
-
-      const payload = Object.assign({}, lastPayload, { forceNew: true });
-
-      try {
-        const res = await fetch('/.netlify/functions/createTicket', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        const data = await res.json();
-        if (data.error) {
-          statusEl.textContent = 'Error: ' + data.error;
-          submitBtn.disabled = false;
-          return;
-        }
-
-        if (data.created) {
-          const link = `/ticket.html?id=${encodeURIComponent(data.ticketId)}`;
-          statusEl.innerHTML = `
-            ✅ New ticket created.<br/>
-            <a href="${link}">Open ticket #${data.ticketId}</a>
-          `;
-          form.reset();
-        } else {
-          statusEl.textContent = 'Could not create ticket; unexpected response.';
-        }
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = 'Network error while creating new ticket.';
-      } finally {
-        submitBtn.disabled = false;
-      }
-    }
+    });
   </script>
 </body>
 </html>
