@@ -1,65 +1,53 @@
 /**
  * netlify/functions/createTicket.js
- * Creates a ticket row in Supabase and returns the new ticket id.
- *
- * Expects JSON:
- * {
- *   tech_name: string,
- *   location_friendly: string,
- *   description: string,
- *   lat?: number|null,
- *   lon?: number|null,
- *   photo_url?: string|null
- * }
+ * Creates a ticket in Supabase.
  */
 const { createClient } = require("@supabase/supabase-js");
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-function json(statusCode, obj) {
+function response(statusCode, bodyObj) {
   return {
     statusCode,
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "Content-Type",
-      "Access-Control-Allow-Methods": "POST,OPTIONS",
+      "Access-Control-Allow-Methods": "POST,OPTIONS"
     },
-    body: JSON.stringify(obj),
+    body: JSON.stringify(bodyObj)
   };
 }
 
-exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") return json(200, { ok: true });
+exports.handler = async function handler(event) {
+  if (event.httpMethod === "OPTIONS") return response(200, { ok: true });
+  if (event.httpMethod !== "POST") return response(405, { error: "Method Not Allowed" });
 
-  if (event.httpMethod !== "POST") return json(405, { error: "Method Not Allowed" });
-
-  if (!supabaseUrl || !supabaseServiceKey) {
-    return json(500, { error: "Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY" });
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return response(500, { error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" });
   }
 
   let payload;
   try {
     payload = JSON.parse(event.body || "{}");
-  } catch {
-    return json(400, { error: "Bad JSON body" });
+  } catch (e) {
+    return response(400, { error: "Bad JSON body" });
   }
 
   const tech_name = (payload.tech_name || "").trim();
   const location_friendly = (payload.location_friendly || "").trim();
   const description = (payload.description || "").trim();
-  const lat = payload.lat ?? null;
-  const lon = payload.lon ?? null;
-  const photo_url = payload.photo_url ?? null;
+  const lat = payload.lat !== undefined ? payload.lat : null;
+  const lon = payload.lon !== undefined ? payload.lon : null;
+  const photo_url = payload.photo_url || null;
 
-  if (!tech_name) return json(400, { error: "tech_name is required" });
-  if (!location_friendly) return json(400, { error: "location_friendly is required" });
-  if (!description) return json(400, { error: "description is required" });
-  // photo required by your workflow:
-  if (!photo_url) return json(400, { error: "photo_url is required (photo must upload first)" });
+  if (!tech_name) return response(400, { error: "tech_name is required" });
+  if (!location_friendly) return response(400, { error: "location_friendly is required" });
+  if (!description) return response(400, { error: "description is required" });
+  if (!photo_url) return response(400, { error: "photo_url is required" });
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
     const { data, error } = await supabase
@@ -68,10 +56,10 @@ exports.handler = async (event) => {
       .select("id")
       .single();
 
-    if (error) return json(500, { error: "Failed to create ticket", details: error.message });
+    if (error) return response(500, { error: "Failed to create ticket", details: error.message });
 
-    return json(200, { ok: true, id: data.id, ticket: { id: data.id } });
+    return response(200, { ok: true, id: data.id, ticket: { id: data.id } });
   } catch (e) {
-    return json(500, { error: "Unhandled exception", details: e.message || String(e) });
+    return response(500, { error: "Unhandled exception", details: e && e.message ? e.message : String(e) });
   }
 };
