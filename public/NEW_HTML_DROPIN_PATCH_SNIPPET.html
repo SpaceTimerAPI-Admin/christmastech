@@ -1,0 +1,46 @@
+<!-- public/NEW_HTML_DROPIN_PATCH_SNIPPET.html
+Paste these helpers into new.html (inside your <script> block), and replace your upload call
+to use uploadPhotoWithFallback(base64, contentType).
+-->
+<script>
+async function fetchJsonStrict(url, opts) {
+  const res = await fetch(url, opts);
+  const ct = res.headers.get('content-type') || '';
+  const isJson = ct.includes('application/json');
+
+  if (!res.ok) {
+    let details = '';
+    try {
+      details = isJson ? (await res.json()).error : (await res.text()).slice(0, 300);
+    } catch {}
+    const err = new Error(details || (res.status + ' ' + res.statusText));
+    err.status = res.status;
+    err.url = url;
+    throw err;
+  }
+
+  if (!isJson) {
+    const text = (await res.text()).slice(0, 300);
+    const err = new Error('Expected JSON but got ' + ct + ': ' + text);
+    err.status = res.status;
+    err.url = url;
+    throw err;
+  }
+
+  return await res.json();
+}
+
+async function uploadPhotoWithFallback(base64, contentType = 'image/jpeg') {
+  const payload = JSON.stringify({ base64, contentType });
+  const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload };
+
+  try {
+    return await fetchJsonStrict('/.netlify/functions/uploadPhoto', opts);
+  } catch (e1) {
+    if (e1.status === 404) {
+      return await fetchJsonStrict('/.netlify/functions/uploadphoto', opts);
+    }
+    throw e1;
+  }
+}
+</script>
