@@ -1,4 +1,4 @@
 // netlify/functions/uploadphoto.js
-// Alias for clients hitting /.netlify/functions/uploadphoto (case mismatch)
+// Alias: /.netlify/functions/uploadphoto  -> uploadPhoto.js
 const { handler } = require('./uploadPhoto');
 exports.handler = handler;
