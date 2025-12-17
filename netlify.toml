@@ -2,6 +2,4 @@
   publish = "public"
   functions = "netlify/functions"
 
-# 5pm Eastern report (Netlify schedules run in UTC). 5pm ET = 22:00 UTC during Standard Time.
-[functions."dailyReport"]
-  schedule = "0 22 * * *"
+# 5pm Eastern report (Netlify schedules run in UTC). 5pm ET = 22:00 UTC during 
