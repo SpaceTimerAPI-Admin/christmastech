@@ -1,46 +1,79 @@
 // netlify/functions/_lib.js
-const https = require("https");
+// Shared helpers for Netlify Functions (CORS + JSON responses + GroupMe posting)
 
-const GROUPME_BOT_ID = process.env.GROUPME_BOT_ID;
-const SITE_BASE_URL = (process.env.SITE_BASE_URL || "https://swoems.com").replace(/\/+$/, "");
+const https = require('https');
 
-function json(statusCode, obj) {
+const SITE_BASE_URL = (process.env.SITE_BASE_URL || 'https://swoems.com').replace(/\/$/, '');
+const GROUPME_BOT_ID = process.env.GROUPME_BOT_ID || '';
+const GROUPME_BOT_POST_URL = process.env.GROUPME_BOT_POST_URL || 'https://api.groupme.com/v3/bots/post';
+
+function corsHeaders() {
   return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    },
-    body: JSON.stringify(obj),
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
   };
 }
 
-function ok(obj = {}) { return json(200, obj); }
-function bad(msg, extra = {}) { return json(400, { error: msg, ...extra }); }
-function server(msg, extra = {}) { return json(500, { error: msg, ...extra }); }
-
-function sendToGroupMe(text) {
-  return new Promise((resolve) => {
-    if (!GROUPME_BOT_ID) return resolve(false);
-
-    const postData = JSON.stringify({ bot_id: GROUPME_BOT_ID, text });
-
-    const req = https.request(
-      { hostname: "api.groupme.com", path: "/v3/bots/post", method: "POST",
-        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(postData) } },
-      (res) => { res.on("data", () => {}); res.on("end", () => resolve(res.statusCode >= 200 && res.statusCode < 300)); }
-    );
-
-    req.on("error", () => resolve(false));
-    req.write(postData);
-    req.end();
-  });
+function json(statusCode, bodyObj) {
+  return {
+    statusCode,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders() },
+    body: JSON.stringify(bodyObj ?? {}),
+  };
 }
+
+function ok(bodyObj = {}) { return json(200, bodyObj); }
+function bad(message, extra = {}) { return json(400, { error: message, ...extra }); }
+function server(message, extra = {}) { return json(500, { error: message, ...extra }); }
 
 function ticketUrl(id) {
   return `${SITE_BASE_URL}/ticket.html?id=${encodeURIComponent(id)}`;
 }
 
-module.exports = { ok, bad, server, sendToGroupMe, ticketUrl, SITE_BASE_URL };
+function postJson(url, payload) {
+  return new Promise((resolve, reject) => {
+    try {
+      const u = new URL(url);
+      const data = Buffer.from(JSON.stringify(payload), 'utf8');
+      const req = https.request(
+        {
+          method: 'POST',
+          hostname: u.hostname,
+          path: u.pathname + (u.search || ''),
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': data.length,
+          },
+        },
+        (res) => {
+          let body = '';
+          res.on('data', (c) => (body += c));
+          res.on('end', () => resolve({ status: res.statusCode || 0, body }));
+        }
+      );
+      req.on('error', reject);
+      req.write(data);
+      req.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+async function sendToGroupMe(text) {
+  if (!GROUPME_BOT_ID) return { skipped: true };
+  const payload = { bot_id: GROUPME_BOT_ID, text: String(text || '') };
+  const res = await postJson(GROUPME_BOT_POST_URL, payload);
+  return res;
+}
+
+module.exports = {
+  SITE_BASE_URL,
+  ok,
+  bad,
+  server,
+  json,
+  ticketUrl,
+  sendToGroupMe,
+};
