@@ -99,7 +99,7 @@
       <div class="row" style="margin-bottom:.75rem;">
         <div style="flex:1;min-width:240px;">
           <label for="commentBody">Add an update</label>
-          \1\n\n<label style="display:block;margin-top:0.75rem;">Attach photo (optional)</label>\n<input id="commentPhoto" type="file" accept="image/*" />
+          \1\n\n<label style="display:block;margin-top:0.75rem;">Attach photo (optional)</label>\n<input id="comment_photo" type="file" accept="image/*" />
         </div>
       </div>
 
@@ -286,65 +286,57 @@
     btnFix.addEventListener('click',()=>updateStatus('fixed'));
     btnReopen.addEventListener('click',()=>updateStatus('open'));
 
-    btnAddComment.addEventListener('click',async()=>{
-      const author=(commentAuthor.value||'').trim();
-      const body=(commentBody.value||'').trim();
-      if(!author){commentPostMsg.innerHTML='<span class="error">Please enter your name.</span>';return;}
-      if(!body){commentPostMsg.innerHTML='<span class="error">Please enter a comment.</span>';return;}
-      localStorage.setItem('ticket_comment_author',author);
+    btnAddComment.addEventListener('click', async () => {
+      const author = (document.getElementById('comment_author').value || '').trim();
+      const comment = (document.getElementById('comment_body').value || '').trim();
+      const file = document.getElementById('comment_photo') ? document.getElementById('comment_photo').files[0] : null;
 
-      try{
-        btnAddComment.disabled=true;
-        commentPostMsg.textContent='Posting...';
-        await fetchJson('/.netlify/functions/addComment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticket_id:Number(ticketId),author,body})});
-        commentBody.value='';
-        commentPostMsg.innerHTML='<span class="ok">Comment posted.</span>';
+      if (!author || !comment) {
+        alert('Please enter your name and an update.');
+        return;
+      }
+
+      btnAddComment.disabled = true;
+
+      try {
+        let photo_path = null;
+
+        if (file) {
+          // upload comment photo
+          const arrayBuffer = await file.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+          let binary = '';
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          const base64 = btoa(binary);
+
+          const up = await fetchJson('/.netlify/functions/uploadPhoto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ base64, contentType: file.type || 'image/jpeg' })
+          });
+          photo_path = up.path || up.file || null;
+        }
+
+        await fetchJson('/.netlify/functions/addComment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticket_id: ticketId, author, comment, photo_path })
+        });
+
+        document.getElementById('comment_body').value = '';
+        if (document.getElementById('comment_photo')) document.getElementById('comment_photo').value = '';
+
         await loadTicket();
-      }catch(err){
-        commentPostMsg.innerHTML='<span class="error">Failed to post. '+esc(err.message)+'</span>';
-      }finally{
-        btnAddComment.disabled=false;
+      } catch (e) {
+        console.error(e);
+        alert('Could not post comment: ' + (e.message || e));
+      } finally {
+        btnAddComment.disabled = false;
       }
     });
 
     loadTicket();
   </script>
-
-<script>
-  // --- Comment photo support patch ---
-  async function _uploadCommentPhotoIfAny() {
-    const input = document.getElementById('commentPhoto');
-    if (!input || !input.files || !input.files[0]) return null;
-
-    const fd = new FormData();
-    fd.append('file', input.files[0], 'comment.jpg');
-
-    const res = await fetch('/.netlify/functions/uploadPhoto', { method: 'POST', body: fd, cache: 'no-store' });
-    const txt = await res.text();
-    let json = null;
-    try { json = JSON.parse(txt); } catch {}
-    if (!res.ok) {
-      throw new Error((json && (json.error || json.errorMessage)) ? (json.error || json.errorMessage) : txt);
-    }
-    const url = json && (json.publicUrl || json.public_url || json.url) ? (json.publicUrl || json.public_url || json.url) : null;
-    if (!url) throw new Error('Photo upload succeeded but no publicUrl returned.');
-    return url;
-  }
-
-  // Render comment photos if present
-  function _renderCommentPhotos(photos) {
-    if (!photos || !photos.length) return '';
-    return photos.map(p => `
-      <div style="margin-top:0.4rem;">
-        <a href="${p.photo_url}" target="_blank" style="color:#55d6ff; text-decoration:none;">Open photo</a><br/>
-        <img src="${p.photo_url}" alt="comment photo" style="margin-top:0.35rem; max-width:100%; border-radius:10px; border:1px solid #1e2640;" />
-      </div>
-    `).join('');
-  }
-
-  // If your page already has a function that renders comments, try to patch it
-  window.__commentPhotoPatch = { _renderCommentPhotos, _uploadCommentPhotoIfAny };
-</script>
 
 </body>
 </html>

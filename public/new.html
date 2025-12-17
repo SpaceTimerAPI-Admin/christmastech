@@ -99,146 +99,6 @@
       return json || {};
     }
 
-    
-    // --- Duplicate modal helpers ---
-    const dupModal = document.getElementById('dupModal');
-    const dupList = document.getElementById('dupList');
-    const dupMsg = document.getElementById('dupMsg');
-    const dupClose = document.getElementById('dupClose');
-    const dupCreateNew = document.getElementById('dupCreateNew');
-    const dupMergeFirst = document.getElementById('dupMergeFirst');
-
-    let pendingCreatePayload = null; // {tech_name, location_friendly, description, lat, lon, photo_url}
-    let duplicateMatches = [];
-    let selectedDuplicateId = null;
-
-    function showDupModal(matches, radius_m) {
-      duplicateMatches = matches || [];
-      selectedDuplicateId = duplicateMatches.length ? duplicateMatches[0].id : null;
-      dupMsg.textContent = '';
-      dupList.innerHTML = '';
-
-      duplicateMatches.forEach((t, idx) => {
-        const card = document.createElement('div');
-        card.style.background = '#11172a';
-        card.style.border = (t.id === selectedDuplicateId) ? '2px solid #55d6ff' : '1px solid #1e2640';
-        card.style.borderRadius = '12px';
-        card.style.padding = '0.75rem';
-        card.style.cursor = 'pointer';
-
-        const dist = (typeof t.distance_m === 'number') ? `${Math.round(t.distance_m)}m` : '';
-        const photo = t.photo_url ? `
-          <div style="margin-top:0.5rem;">
-            <img src="${t.photo_url}" alt="ticket photo" style="max-width:100%;border-radius:10px;border:1px solid #1e2640;" />
-          </div>` : '';
-
-        card.innerHTML = `
-          <div style="display:flex;justify-content:space-between;gap:0.75rem;align-items:baseline;">
-            <div style="font-weight:900;">Ticket #${t.id} • ${t.location_friendly || ''}</div>
-            <div style="color:#a7a7a7;font-size:0.85rem;">${dist}</div>
-          </div>
-          <div style="margin-top:0.25rem;color:#cfcfcf;font-size:0.92rem;">${t.description ? `"${t.description}"` : ''}</div>
-          <div style="margin-top:0.35rem;">
-            <a href="/ticket.html?id=${t.id}" target="_blank" style="color:#55d6ff;text-decoration:none;font-weight:800;">Open ticket</a>
-          </div>
-          ${photo}
-        `;
-
-        card.addEventListener('click', () => {
-          selectedDuplicateId = t.id;
-          // re-render borders
-          [...dupList.children].forEach((child) => child.style.border = '1px solid #1e2640');
-          card.style.border = '2px solid #55d6ff';
-        });
-
-        dupList.appendChild(card);
-      });
-
-      const topLine = document.createElement('div');
-      topLine.className = 'muted';
-      topLine.style.marginBottom = '0.5rem';
-      topLine.textContent = `Within ~${radius_m || 25}m: ${duplicateMatches.length} open ticket(s) found.`;
-      dupList.prepend(topLine);
-
-      dupModal.style.display = 'flex';
-    }
-
-    function hideDupModal() {
-      dupModal.style.display = 'none';
-    }
-
-    dupClose?.addEventListener('click', hideDupModal);
-
-    async function createTicketFinal(force_create=false) {
-      if (!pendingCreatePayload) throw new Error('Missing pending payload');
-      const payload = Object.assign({}, pendingCreatePayload, { force_create: !!force_create });
-      return await fetchJsonOrText('/.netlify/functions/createTicket', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(payload),
-        cache: 'no-store'
-      });
-    }
-
-    async function mergeIntoTicket(ticketId) {
-      if (!pendingCreatePayload) throw new Error('Missing pending payload');
-      const { tech_name, location_friendly, description, photo_url } = pendingCreatePayload;
-
-      const body = `Possible duplicate reported at "${location_friendly}": ${description}`;
-      return await fetchJsonOrText('/.netlify/functions/addComment', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          ticket_id: Number(ticketId),
-          author: tech_name,
-          body,
-          photo_url
-        }),
-        cache: 'no-store'
-      });
-    }
-
-    dupCreateNew?.addEventListener('click', async () => {
-      try {
-        dupCreateNew.disabled = true;
-        dupMergeFirst.disabled = true;
-        dupMsg.textContent = 'Creating new ticket...';
-        const createRes = await createTicketFinal(true);
-        const id = createRes.id || (createRes.ticket && createRes.ticket.id);
-        hideDupModal();
-        setMsg('Ticket created successfully.', 'ok');
-        if (id) location.href = '/ticket.html?id=' + id;
-      } catch (e) {
-        console.error(e);
-        dupMsg.textContent = 'Error: ' + (e.message || e);
-      } finally {
-        dupCreateNew.disabled = false;
-        dupMergeFirst.disabled = false;
-      }
-    });
-
-    dupMergeFirst?.addEventListener('click', async () => {
-      try {
-        if (!selectedDuplicateId) {
-          dupMsg.textContent = 'Select a ticket to merge into.';
-          return;
-        }
-        dupCreateNew.disabled = true;
-        dupMergeFirst.disabled = true;
-        dupMsg.textContent = `Merging into Ticket #${selectedDuplicateId}...`;
-        await mergeIntoTicket(selectedDuplicateId);
-        hideDupModal();
-        setMsg(`Merged into Ticket #${selectedDuplicateId}.`, 'ok');
-        location.href = '/ticket.html?id=' + selectedDuplicateId;
-      } catch (e) {
-        console.error(e);
-        dupMsg.textContent = 'Error: ' + (e.message || e);
-      } finally {
-        dupCreateNew.disabled = false;
-        dupMergeFirst.disabled = false;
-      }
-    });
-
     submitBtn.addEventListener('click', async () => {
       const tech_name = (document.getElementById('tech_name').value || '').trim();
       const location_friendly = (document.getElementById('location_friendly').value || '').trim();
@@ -262,7 +122,7 @@
         const compressed = await compressImage(file);
         const photoBlob = compressed || file;
 
-        // Upload photo first (required)
+        // ✅ Use FormData instead of base64 to avoid size/encoding issues
         const fd = new FormData();
         fd.append('file', photoBlob, 'ticket.jpg');
 
@@ -273,34 +133,22 @@
         });
 
         const photo_url = uploadRes.publicUrl || uploadRes.public_url || uploadRes.url;
-        if (!photo_url) throw new Error('Upload did not return publicUrl.');
+        if (!photo_url) {
+          throw new Error('Upload did not return publicUrl.');
+        }
 
-        // Build payload (used for dry-run + create)
-        pendingCreatePayload = {
-          tech_name,
-          location_friendly,
-          description,
-          lat: coords ? coords.lat : null,
-          lon: coords ? coords.lon : null,
-          photo_url
-        };
-
-        // Duplicate check (only checks OPEN tickets; server-enforced)
-        const precheck = await fetchJsonOrText('/.netlify/functions/createTicket', {
+        const createRes = await fetchJsonOrText('/.netlify/functions/createTicket', {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
-          body: JSON.stringify(Object.assign({}, pendingCreatePayload, { dry_run: true })),
+          body: JSON.stringify({
+            tech_name, location_friendly, description,
+            lat: coords ? coords.lat : null,
+            lon: coords ? coords.lon : null,
+            photo_url
+          }),
           cache: 'no-store'
         });
 
-        if (precheck && precheck.duplicate && Array.isArray(precheck.matches) && precheck.matches.length) {
-          setMsg('Possible duplicate found. Review prompt.', 'muted');
-          showDupModal(precheck.matches, precheck.radius_m);
-          return; // stop here; modal will decide merge/new
-        }
-
-        // No duplicates → create ticket
-        const createRes = await createTicketFinal(false);
         const id = createRes.id || (createRes.ticket && createRes.ticket.id);
         setMsg('Ticket created successfully.', 'ok');
         if (id) location.href = '/ticket.html?id=' + id;
@@ -312,26 +160,5 @@
       }
     });
   </script>
-    }
-    });
-  </script>
-
-  <!-- Duplicate check modal -->
-  <div id="dupModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.72);display:none;align-items:center;justify-content:center;padding:1rem;z-index:9999;">
-    <div style="width:100%;max-width:720px;background:#0b1022;border:1px solid #1e2640;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,0.6);padding:1rem;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-        <div style="font-weight:900;font-size:1.05rem;">Possible duplicate ticket nearby</div>
-        <button id="dupClose" style="background:transparent;border:0;color:#55d6ff;font-weight:800;cursor:pointer;">Close</button>
-      </div>
-      <div class="muted" style="margin-top:0.35rem;">We found open ticket(s) near your GPS location. Review below before creating a new one.</div>
-      <div id="dupList" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.75rem;"></div>
-      <div style="display:flex;gap:0.75rem;margin-top:1rem;flex-wrap:wrap;">
-        <button id="dupCreateNew" class="btn" style="flex:1;background:#f1c40f;">Create new ticket anyway</button>
-        <button id="dupMergeFirst" class="btn" style="flex:1;background:#2ecc71;">Merge into selected ticket</button>
-      </div>
-      <div id="dupMsg" class="muted" style="margin-top:0.5rem;"></div>
-    </div>
-  </div>
-
 </body>
 </html>
