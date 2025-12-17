@@ -70,38 +70,6 @@ exports.handler = async (event) => {
       }));
     }
 
-    // Attach optional comment photos from comment_photos table
-    // (schema: comment_id, photo_url, created_at)
-    if (comments.length) {
-      const commentIds = comments.map((c) => c.id).filter((v) => !!v);
-      if (commentIds.length) {
-        const { data: cPhotos, error: cpErr } = await supabase
-          .from('comment_photos')
-          .select('comment_id,photo_url,created_at')
-          .in('comment_id', commentIds)
-          .order('created_at', { ascending: true });
-
-        if (!cpErr && Array.isArray(cPhotos)) {
-          const byComment = new Map();
-          for (const p of cPhotos) {
-            const cid = p.comment_id;
-            if (!cid || !p.photo_url) continue;
-            if (!byComment.has(cid)) byComment.set(cid, []);
-            byComment.get(cid).push(p.photo_url);
-          }
-          comments = comments.map((c) => ({
-            ...c,
-            photo_urls: byComment.get(c.id) || (c.photo_url ? [c.photo_url] : []),
-          }));
-        } else {
-          comments = comments.map((c) => ({
-            ...c,
-            photo_urls: c.photo_url ? [c.photo_url] : [],
-          }));
-        }
-      }
-    }
-
     return ok({ ticket, photos, comments });
   } catch (e) {
     return server('Server error', { details: String(e?.message || e) });

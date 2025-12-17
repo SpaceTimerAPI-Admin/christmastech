@@ -29,21 +29,13 @@ exports.handler = async (event) => {
       attachedPublicUrl = photo_url;
     }
 
-    // ticket_comments table does NOT store photo_url (photos are in comment_photos)
     const { data: row, error } = await sb
       .from("ticket_comments")
-      .insert([{ ticket_id, author, body: comment }])
+      .insert([{ ticket_id, author, body: comment, photo_url: attachedPublicUrl }])
       .select("*")
       .single();
 
     if (error) return server("Add comment failed", { details: error.message });
-
-    if (attachedPublicUrl) {
-      const { error: pErr } = await sb
-        .from("comment_photos")
-        .insert([{ comment_id: row.id, photo_url: attachedPublicUrl }]);
-      if (pErr) return server("Add comment photo failed", { details: pErr.message });
-    }
 
     const lines = [
       "📝 Ticket Update",
