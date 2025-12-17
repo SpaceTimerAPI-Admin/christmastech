@@ -1,17 +1,21 @@
 /**
  * netlify/functions/createTicket.js
- * Creates a ticket row in Supabase.
+ * Creates a ticket row in Supabase and posts a GroupMe notification.
  *
  * Accepts JSON:
  *  - tech_name, location_friendly, description (required)
  *  - lat, lon (optional)
- *  - photo_url (required)  [NOTE: for compatibility, photo_path is also accepted]
+ *  - photo_url (preferred) OR photo_path/path (legacy)
  */
 const { createClient } = require("@supabase/supabase-js");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const BUCKET = process.env.TICKET_PHOTOS_BUCKET || "ticket-photos";
+
+const groupmeBotId = process.env.GROUPME_BOT_ID;
+const groupmePostUrl = process.env.GROUPME_BOT_POST_URL || "https://api.groupme.com/v3/bots/post";
+const siteBaseUrl = (process.env.SITE_BASE_URL || "https://swoems.com").replace(/\/+$/,"");
 
 function resp(statusCode, obj) {
   return {
@@ -24,6 +28,19 @@ function resp(statusCode, obj) {
     },
     body: JSON.stringify(obj)
   };
+}
+
+async function sendToGroupMe(text) {
+  if (!groupmeBotId) return;
+  try {
+    await fetch(groupmePostUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bot_id: groupmeBotId, text })
+    });
+  } catch (_) {
+    // Don't fail ticket creation if GroupMe is down/misconfigured
+  }
 }
 
 exports.handler = async (event) => {
@@ -44,14 +61,11 @@ exports.handler = async (event) => {
   const lat = payload.lat ?? null;
   const lon = payload.lon ?? null;
 
-  // Prefer photo_url, but allow photo_path for older clients
   let photo_url = payload.photo_url || null;
   const photo_path = payload.photo_path || payload.path || null;
 
   if (!photo_url && photo_path) {
-    // Build public URL from path if possible
-    // https://<project>.supabase.co/storage/v1/object/public/<bucket>/<path>
-    const base = SUPABASE_URL.replace(/\/+$/,'');
+    const base = SUPABASE_URL.replace(/\/+$/,"");
     photo_url = `${base}/storage/v1/object/public/${BUCKET}/${photo_path}`;
   }
 
@@ -71,7 +85,17 @@ exports.handler = async (event) => {
 
     if (error) return resp(500, { error: "Failed to create ticket", details: error.message });
 
-    return resp(200, { ok: true, id: data.id, ticket: { id: data.id } });
+    const id = data.id;
+    const link = `${siteBaseUrl}/ticket.html?id=${id}`;
+
+    // 🔔 GroupMe announce new ticket
+    await sendToGroupMe(
+      `🚨 NEW Ticket #${id} created by ${tech_name}\n` +
+      `${location_friendly}\n` +
+      `${link}`
+    );
+
+    return resp(200, { ok: true, id, ticket: { id } });
   } catch (e) {
     return resp(500, { error: "Unhandled exception", details: e.message || String(e) });
   }
