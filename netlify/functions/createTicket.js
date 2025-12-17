@@ -1,86 +1,71 @@
-// netlify/functions/createTicket.js
-// Creates a ticket and (optionally) attaches the uploaded photo path to ticket_photos.
-// Sends a GroupMe alert with ticket link + description (+ photo link).
-const { getSb } = require("./sb");
-const { ok, bad, server, sendToGroupMe, ticketUrl } = require("./_lib");
+const { getSb } = require('./sb');
+const { json, bad, server } = require('./_lib');
 
+// Create a new ticket and (optionally) attach an uploaded photo.
+// Body (JSON):
+// {
+//   tech_name: string,
+//   location_friendly: string,
+//   description: string,
+//   lat?: number|null,
+//   lon?: number|null,
+//   photo_path?: string|null   // storage object path from uploadPhoto
+// }
 exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") return ok({});
-  if (event.httpMethod !== "POST") return bad("Use POST");
-
   try {
-    const body = JSON.parse(event.body || "{}");
-    const tech_name = (body.tech_name || "").trim();
-    const location_friendly = (body.location_friendly || "").trim();
-    const description = (body.description || "").trim();
-    const lat = body.lat ?? null;
-    const lon = body.lon ?? null;
-    const photo_path = body.photo_path || body.photoPath || null;
-    const photo_url = body.photo_url || body.photoUrl || null;
+    if (event.httpMethod !== 'POST') return bad('Method not allowed', 405);
+
+    let body;
+    try {
+      body = JSON.parse(event.body || '{}');
+    } catch (e) {
+      // This is the "Unexpected token ... not valid JSON" case.
+      return bad('Request body must be JSON', 400, { details: String(e.message || e) });
+    }
+
+    const tech_name = (body.tech_name || '').toString().trim();
+    const location_friendly = (body.location_friendly || '').toString().trim();
+    const description = (body.description || '').toString().trim();
+    const lat = body.lat === '' ? null : body.lat;
+    const lon = body.lon === '' ? null : body.lon;
+    const photo_path = body.photo_path ? body.photo_path.toString() : null;
 
     if (!tech_name || !location_friendly || !description) {
-      return bad("Missing required fields");
+      return bad('Missing required fields', 400);
     }
 
     const sb = getSb();
 
-    const { data: ticket, error: tErr } = await sb
-      .from("tickets")
-      .insert([{ tech_name, location_friendly, description, lat, lon, status: "open" }])
-      .select("*")
+    const { data: ticket, error } = await sb
+      .from('tickets')
+      .insert([
+        {
+          tech_name,
+          location_friendly,
+          description,
+          status: 'open',
+          lat: lat ?? null,
+          lon: lon ?? null,
+        },
+      ])
+      .select('*')
       .single();
 
-    if (tErr) return server("Ticket insert failed", { details: tErr.message });
-
-    let attachedPublicUrl = null;
-
-    // If frontend uploaded photo to storage, attach it to ticket_photos table
-    const storagePath = photo_path || null;
-    if (storagePath) {
-      const { data: pub } = sb.storage.from("ticket-photos").getPublicUrl(storagePath);
-      attachedPublicUrl = pub?.publicUrl || null;
-
-      // ticket_photos schema: ticket_id, file_path, public_url
-      const { error: tpErr } = const { error: tpErr2 } = await sb.from("ticket_photos").insert([{
-
-        ticket_id: ticket.id,
-        file_path: storagePath,
-        public_url: attachedPublicUrl
-      }]);
-      // Ignore missing ticket_photos table
-      // eslint-disable-next-line no-unused-vars
-      const _ignore = tpErr;
-    } else if (photo_url) {
-      attachedPublicUrl = photo_url;
-      await sb.from("ticket_photos").insert([{
-        ticket_id: ticket.id,
-        file_path: null,
-        public_url: attachedPublicUrl
-      }]);
+    if (error || !ticket) {
+      return server('Create ticket failed', 500, { details: error?.message || String(error) });
     }
 
-    
-    // Also store legacy photo_url directly on ticket row (older UI expects this).
-    if (attachedPublicUrl) {
-      await sb.from("tickets").update({ photo_url: attachedPublicUrl }).eq("id", ticket.id);
+    // Attach photo (if provided)
+    if (photo_path) {
+      const publicUrl = sb.storage.from('ticket-photos').getPublicUrl(photo_path)?.data?.publicUrl;
+      if (publicUrl) {
+        // best-effort insert; don't fail ticket creation if photo row fails
+        await sb.from('ticket_photos').insert([{ ticket_id: ticket.id, photo_url: publicUrl }]);
+      }
     }
 
-// GroupMe alert
-    const lines = [
-      "🟢 New Ticket Created",
-      `#${ticket.id} – ${ticket.location_friendly}`,
-      "",
-      description.length > 220 ? (description.slice(0, 220) + "…") : description,
-      "",
-      ticketUrl(ticket.id),
-    ];
-    if (attachedPublicUrl) {
-      lines.push("", "Photo:", attachedPublicUrl);
-    }
-    await sendToGroupMe(lines.join("\n"));
-
-    return ok({ ticket, id: ticket.id });
+    return json({ ok: true, id: ticket.id, ticket });
   } catch (e) {
-    return server("Create ticket error", { details: String(e?.message || e) });
+    return server('Server error', 500, { details: String(e.message || e) });
   }
 };

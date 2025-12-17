@@ -122,20 +122,22 @@
         const compressed = await compressImage(file);
         const photoBlob = compressed || file;
 
-        // ✅ Use FormData instead of base64 to avoid size/encoding issues
-        const fd = new FormData();
-        fd.append('file', photoBlob, 'ticket.jpg');
+        // Upload as JSON base64 so the Netlify function can parse reliably
+        const ab = await photoBlob.arrayBuffer();
+        const bytes = new Uint8Array(ab);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const base64 = btoa(binary);
 
         const uploadRes = await fetchJsonOrText('/.netlify/functions/uploadPhoto', {
           method: 'POST',
-          body: fd,
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ base64, contentType: 'image/jpeg' }),
           cache: 'no-store'
         });
 
-        const photo_url = uploadRes.publicUrl || uploadRes.public_url || uploadRes.url;
-        if (!photo_url) {
-          throw new Error('Upload did not return publicUrl.');
-        }
+        const photo_path = uploadRes.path;
+        if (!photo_path) throw new Error('Upload did not return path.');
 
         const createRes = await fetchJsonOrText('/.netlify/functions/createTicket', {
           method: 'POST',
@@ -144,7 +146,7 @@
             tech_name, location_friendly, description,
             lat: coords ? coords.lat : null,
             lon: coords ? coords.lon : null,
-            photo_url
+            photo_path
           }),
           cache: 'no-store'
         });
