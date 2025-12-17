@@ -99,7 +99,7 @@
       <div class="row" style="margin-bottom:.75rem;">
         <div style="flex:1;min-width:240px;">
           <label for="commentBody">Add an update</label>
-          <textarea id="commentBody" rows="3" placeholder="What changed? What did you test? Any parts needed?"></textarea>
+          \1\n\n<label style="display:block;margin-top:0.75rem;">Attach photo (optional)</label>\n<input id="commentPhoto" type="file" accept="image/*" />
         </div>
       </div>
 
@@ -309,5 +309,42 @@
 
     loadTicket();
   </script>
+
+<script>
+  // --- Comment photo support patch ---
+  async function _uploadCommentPhotoIfAny() {
+    const input = document.getElementById('commentPhoto');
+    if (!input || !input.files || !input.files[0]) return null;
+
+    const fd = new FormData();
+    fd.append('file', input.files[0], 'comment.jpg');
+
+    const res = await fetch('/.netlify/functions/uploadPhoto', { method: 'POST', body: fd, cache: 'no-store' });
+    const txt = await res.text();
+    let json = null;
+    try { json = JSON.parse(txt); } catch {}
+    if (!res.ok) {
+      throw new Error((json && (json.error || json.errorMessage)) ? (json.error || json.errorMessage) : txt);
+    }
+    const url = json && (json.publicUrl || json.public_url || json.url) ? (json.publicUrl || json.public_url || json.url) : null;
+    if (!url) throw new Error('Photo upload succeeded but no publicUrl returned.');
+    return url;
+  }
+
+  // Render comment photos if present
+  function _renderCommentPhotos(photos) {
+    if (!photos || !photos.length) return '';
+    return photos.map(p => `
+      <div style="margin-top:0.4rem;">
+        <a href="${p.photo_url}" target="_blank" style="color:#55d6ff; text-decoration:none;">Open photo</a><br/>
+        <img src="${p.photo_url}" alt="comment photo" style="margin-top:0.35rem; max-width:100%; border-radius:10px; border:1px solid #1e2640;" />
+      </div>
+    `).join('');
+  }
+
+  // If your page already has a function that renders comments, try to patch it
+  window.__commentPhotoPatch = { _renderCommentPhotos, _uploadCommentPhotoIfAny };
+</script>
+
 </body>
 </html>
