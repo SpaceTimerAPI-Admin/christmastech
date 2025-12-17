@@ -41,11 +41,15 @@ exports.handler = async (event) => {
       attachedPublicUrl = pub?.publicUrl || null;
 
       // ticket_photos schema: ticket_id, file_path, public_url
-      await sb.from("ticket_photos").insert([{
+      const { error: tpErr } = const { error: tpErr2 } = await sb.from("ticket_photos").insert([{
+
         ticket_id: ticket.id,
         file_path: storagePath,
         public_url: attachedPublicUrl
       }]);
+      // Ignore missing ticket_photos table
+      // eslint-disable-next-line no-unused-vars
+      const _ignore = tpErr;
     } else if (photo_url) {
       attachedPublicUrl = photo_url;
       await sb.from("ticket_photos").insert([{
@@ -55,7 +59,13 @@ exports.handler = async (event) => {
       }]);
     }
 
-    // GroupMe alert
+    
+    // Also store legacy photo_url directly on ticket row (older UI expects this).
+    if (attachedPublicUrl) {
+      await sb.from("tickets").update({ photo_url: attachedPublicUrl }).eq("id", ticket.id);
+    }
+
+// GroupMe alert
     const lines = [
       "🟢 New Ticket Created",
       `#${ticket.id} – ${ticket.location_friendly}`,

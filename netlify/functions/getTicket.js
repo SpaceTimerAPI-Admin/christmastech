@@ -27,7 +27,12 @@ exports.handler = async (event) => {
       .eq("ticket_id", id)
       .order("created_at", { ascending: true });
 
-    if (pErr) return server("Photos fetch failed", { details: pErr.message });
+    if (pErr) {
+      // Backwards-compatible: older deployments stored a single photo_url on the ticket row
+      // and may not have the ticket_photos table. Do not fail the whole request.
+      // We'll fall back to ticket.photo_url if present.
+    }
+
 
     const { data: comments, error: cErr } = await sb
       .from("ticket_comments")
@@ -37,7 +42,20 @@ exports.handler = async (event) => {
 
     if (cErr) return server("Comments fetch failed", { details: cErr.message });
 
-    return ok({ ticket, photos: photos || [], comments: comments || [] });
+    
+    // Normalize photos: prefer ticket_photos rows if available; otherwise fallback to ticket.photo_url
+    let photosOut = (photos || []).map(p => ({
+      ...p,
+      public_url: p.public_url || p.publicUrl || null
+    }));
+    if (ticket && ticket.photo_url) {
+      const already = photosOut.some(p => p.public_url === ticket.photo_url);
+      if (!already) {
+        photosOut.unshift({ id: null, ticket_id: ticket.id, file_path: null, public_url: ticket.photo_url, created_at: ticket.created_at });
+      }
+    }
+
+return ok({ ticket, photos: photosOut || [], comments: comments || [] });
   } catch (e) {
     return server("Get ticket error", { details: String(e?.message || e) });
   }
