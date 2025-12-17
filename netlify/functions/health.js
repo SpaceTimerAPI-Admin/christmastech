@@ -1,3 +1,4 @@
 // netlify/functions/health.js
-const { ok } = require("./_lib");
-exports.handler = async () => ok({ ok: true, ts: new Date().toISOString() });
+exports.handler = async () => {
+  return { statusCode: 200, headers: {'Content-Type':'application/json'}, body: JSON.stringify({ ok: true, ts: new Date().toISOString() }) };
+};
