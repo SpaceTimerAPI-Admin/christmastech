@@ -1,81 +1,90 @@
 // netlify/functions/addComment.js
-// Adds a comment/update to a ticket. Optionally attaches a photo (stores in comment_photos).
+// Adds a comment to a ticket AND posts a GroupMe notification.
 const { createClient } = require('@supabase/supabase-js');
 
-function json(statusCode, bodyObj) {
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type',
-      'Access-Control-Allow-Methods': 'POST,OPTIONS',
-    },
-    body: JSON.stringify(bodyObj),
-  };
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+const groupmeBotId = process.env.GROUPME_BOT_ID;
+const groupmePostUrl = process.env.GROUPME_BOT_POST_URL || 'https://api.groupme.com/v3/bots/post';
+const siteBaseUrl = process.env.SITE_BASE_URL || 'https://swoems.com';
+
+async function sendToGroupMe(text) {
+  if (!groupmeBotId) return;
+  try {
+    await fetch(groupmePostUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bot_id: groupmeBotId, text }),
+    });
+  } catch (err) {
+    console.error('GroupMe post failed:', err);
+  }
 }
 
-function parseJsonBody(event) {
-  if (!event.body) return null;
-  const raw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
-  return JSON.parse(raw);
+function clip(s, max = 220) {
+  const t = (s || '').toString().trim();
+  if (t.length <= max) return t;
+  return t.slice(0, max - 1) + '…';
 }
 
 exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return json(200, { ok: true });
-
-  try {
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      return json(500, { error: 'Missing Supabase env vars.' });
-    }
-
-    let payload;
-    try {
-      payload = parseJsonBody(event);
-    } catch (e) {
-      const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString('utf8') : (event.body || '');
-      return json(400, { error: 'Request body must be JSON.', rawPreview: raw.slice(0, 80) });
-    }
-
-    const ticket_id = payload?.ticket_id ?? payload?.id;
-    const author = String(payload?.author || '').trim();
-    const body = String(payload?.comment || payload?.body || '').trim();
-    const photo_path = payload?.photo_path || null;
-
-    if (!ticket_id || !author || !body) {
-      return json(400, { error: 'Missing required fields (ticket_id, author, comment).' });
-    }
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    });
-
-    const { data: commentRow, error: cErr } = await supabase
-      .from('ticket_comments')
-      .insert([{ ticket_id: Number(ticket_id), author, body }])
-      .select('*')
-      .single();
-
-    if (cErr) return json(500, { error: 'Add comment failed', details: cErr.message || cErr });
-
-    if (photo_path) {
-      const bucket = 'ticket-photos';
-      const { data: pub } = supabase.storage.from(bucket).getPublicUrl(photo_path);
-      const photo_url = pub?.publicUrl || null;
-
-      const { error: cpErr } = await supabase
-        .from('comment_photos')
-        .insert([{ comment_id: commentRow.id, ticket_id: Number(ticket_id), photo_url }]);
-
-      if (cpErr) {
-        return json(200, { ok: true, comment: commentRow, warn: 'Comment added but photo record insert failed', photoInsertError: cpErr.message || cpErr });
-      }
-    }
-
-    return json(200, { ok: true, comment: commentRow });
-  } catch (err) {
-    return json(500, { error: 'Server error', details: err?.message || String(err) });
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Supabase env vars are not set' }) };
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  let payload;
+  try { payload = JSON.parse(event.body || '{}'); }
+  catch { return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Invalid JSON body' }) }; }
+
+  const ticketId = Number(payload.ticket_id || payload.ticketId || payload.id);
+  const author = (payload.author || '').toString().trim();
+  const body = (payload.body || payload.comment || '').toString().trim();
+
+  if (!ticketId || Number.isNaN(ticketId)) {
+    return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'ticket_id is required' }) };
+  }
+  if (!author) {
+    return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'author is required' }) };
+  }
+  if (!body) {
+    return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'comment body is required' }) };
+  }
+
+  // Ensure ticket exists (also used for message context)
+  const { data: ticket, error: tErr } = await supabase
+    .from('tickets')
+    .select('id, location_friendly, status')
+    .eq('id', ticketId)
+    .single();
+
+  if (tErr || !ticket) {
+    return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Ticket not found' }) };
+  }
+
+  const { data: inserted, error: cErr } = await supabase
+    .from('ticket_comments')
+    .insert([{ ticket_id: ticketId, author, body }])
+    .select()
+    .single();
+
+  if (cErr || !inserted) {
+    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Failed to add comment', details: cErr?.message || cErr }) };
+  }
+
+  const link = `${siteBaseUrl}/ticket.html?id=${ticketId}`;
+  await sendToGroupMe(
+    `📝 Ticket #${ticketId} updated by ${author}\n` +
+    `${ticket.location_friendly || ''}\n` +
+    `\"${clip(body)}\"\n` +
+    `${link}`
+  );
+
+  return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, comment: inserted }) };
 };

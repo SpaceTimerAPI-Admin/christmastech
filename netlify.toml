@@ -2,7 +2,11 @@
   publish = "public"
   functions = "netlify/functions"
 
-# Friendly short links (optional)
+# Scheduled 5pm report (0 22 * * * = 5pm ET when runtime uses UTC; adjust if needed)
+[functions."dailyReport"]
+  schedule = "0 22 * * *"
+
+# Friendly short links
 [[redirects]]
   from = "/New"
   to = "/new.html"

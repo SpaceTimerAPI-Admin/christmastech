@@ -1,77 +1,67 @@
 // netlify/functions/getTicket.js
-// Returns ticket + photos + comments for ticket.html
+// ✅ Production: get ticket + photos + comments
+// Photos come from ticket_photos OR tickets.photo_url fallback (so old behavior always works).
+const { createClient } = require('@supabase/supabase-js');
 
-const { getSb } = require('./sb');
-const { ok, bad, server } = require('./_lib');
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+function normalizePhotos(ticket, rows) {
+  const out = Array.isArray(rows) ? [...rows] : [];
+
+  const legacyUrl = ticket?.photo_url || ticket?.photoUrl || ticket?.image_url || ticket?.imageUrl || null;
+
+  if (legacyUrl && !out.some(p => (p.photo_url || p.url || p.image_url) === legacyUrl)) {
+    out.unshift({ id: 'primary', ticket_id: ticket.id, photo_url: legacyUrl, created_at: ticket.created_at });
+  }
+
+  return out
+    .map(p => ({ ...p, photo_url: p.photo_url || p.url || p.image_url || p.imageUrl || null }))
+    .filter(p => !!p.photo_url);
+}
 
 exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return ok({});
-  if (event.httpMethod !== 'GET') return bad('Use GET');
-
-  const id = (event.queryStringParameters && (event.queryStringParameters.id || event.queryStringParameters.ticket_id)) || '';
-  const ticketId = parseInt(id, 10);
-  if (!ticketId) return bad('Missing ticket id');
-
-  try {
-    const supabase = getSb();
-
-    // Ticket
-    const { data: ticket, error: tErr } = await supabase
-      .from('tickets')
-      .select('*')
-      .eq('id', ticketId)
-      .single();
-
-    if (tErr) return server('Ticket fetch failed', { details: tErr.message });
-    if (!ticket) return bad('Ticket not found');
-
-    // Photos (prefer ticket_photos table; fall back to ticket.photo_url if present)
-    let photos = [];
-    const { data: photoRows, error: pErr } = await supabase
-      .from('ticket_photos')
-      .select('*')
-      .eq('ticket_id', ticketId)
-      .order('created_at', { ascending: true });
-
-    if (pErr) {
-      // If table doesn't exist or schema differs, don't hard-fail ticket page
-      photos = [];
-    } else {
-      photos = (photoRows || []).map((r) => ({
-        id: r.id ?? null,
-        ticket_id: r.ticket_id ?? ticketId,
-        photo_url: r.photo_url || r.url || null,
-        created_at: r.created_at ?? null,
-      })).filter(p => !!p.photo_url);
-    }
-
-    if (photos.length === 0 && ticket.photo_url) {
-      photos = [{ id: null, ticket_id: ticketId, photo_url: ticket.photo_url, created_at: ticket.created_at }];
-    }
-
-    // Comments
-    let comments = [];
-    const { data: commentRows, error: cErr } = await supabase
-      .from('ticket_comments')
-      .select('*')
-      .eq('ticket_id', ticketId)
-      .order('created_at', { ascending: true });
-
-    if (cErr) {
-      comments = [];
-    } else {
-      comments = (commentRows || []).map((r) => ({
-        id: r.id ?? null,
-        ticket_id: r.ticket_id ?? ticketId,
-        author: r.author ?? r.tech_name ?? null,
-        body: r.body ?? r.comment ?? r.text ?? null,
-        created_at: r.created_at ?? null,
-        photo_url: r.photo_url || null,
-      }));
-    }
-
-    return ok({ ticket, photos, comments });
-  } catch (e) {
-    return server('Server error', { details: String(e?.message || e) });
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Supabase env vars missing' }) };
   }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  const idRaw = event.queryStringParameters?.id;
+  const id = parseInt(idRaw, 10);
+
+  if (!id || Number.isNaN(id)) {
+    return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Valid id query parameter is required' }) };
+  }
+
+  const { data: ticket, error: ticketErr } = await supabase.from('tickets').select('*').eq('id', id).single();
+  if (ticketErr || !ticket) {
+    return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Ticket not found' }) };
+  }
+
+  let photos = [];
+  const { data: pData, error: pErr } = await supabase
+    .from('ticket_photos')
+    .select('*')
+    .eq('ticket_id', id)
+    .order('created_at', { ascending: true });
+
+  if (!pErr) photos = pData || [];
+  else console.error('ticket_photos error:', pErr);
+
+  let comments = [];
+  const { data: cData, error: cErr } = await supabase
+    .from('ticket_comments')
+    .select('id, ticket_id, author, body, created_at')
+    .eq('ticket_id', id)
+    .order('created_at', { ascending: true });
+
+  if (!cErr) comments = cData || [];
+  else console.error('ticket_comments error:', cErr);
+
+  return {
+    statusCode: 200,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ticket, photos: normalizePhotos(ticket, photos), comments }),
+  };
 };

@@ -1,4 +1,4 @@
 // netlify/functions/upload_photo.js
-// Alias for clients hitting /.netlify/functions/upload_photo (legacy naming)
-const { handler } = require('./uploadPhoto');
+// Backwards-compatible alias -> uploadphoto.js
+const { handler } = require("./uploadphoto");
 exports.handler = handler;

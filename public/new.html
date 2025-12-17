@@ -15,19 +15,19 @@
     textarea { min-height: 110px; resize: vertical; }
     .btn { margin-top: 1rem; width:100%; border:0; border-radius:14px; padding:0.9rem 1rem; font-weight:800; font-size:1.05rem; cursor:pointer; background:#2ecc71; color:#000; }
     .muted { color:#a7a7a7; font-size:0.9rem; margin-top:0.5rem; }
-    .error { color:#ff9aa2; white-space:pre-wrap; }
+    .error { color:#ff9aa2; }
     .ok { color:#a7ffb4; }
   </style>
 </head>
 <body>
   <header>
     <strong>Create Ticket</strong>
-    <div><a href="/Dashboard">Dashboard</a></div>
+    <div><a href="/dashboard">Dashboard</a></div>
   </header>
 
   <div class="wrap">
     <div class="card">
-      <div class="muted">Use this when you <strong>cannot</strong> restore a lights issue in the park. Always try to fix it before creating a ticket.</div>
+      <div class="muted">Use this when you <strong>cannot</strong> restore a lights issue in the park.</div>
 
       <label>Your Name</label>
       <input id="tech_name" placeholder="e.g. Adam" />
@@ -68,6 +68,7 @@
       });
     }
 
+    // Compress image client-side to avoid upload failures on large photos (common on iPhone).
     async function compressImage(file, maxDim=1600, quality=0.78) {
       const bitmap = await createImageBitmap(file);
       const width = bitmap.width;
@@ -87,16 +88,16 @@
       });
     }
 
-    async function fetchJsonOrText(url, opts) {
+    async function fetchJson(url, opts) {
       const res = await fetch(url, opts);
-      const text = await res.text();
-      let json = null;
-      try { json = JSON.parse(text); } catch {}
+      const ct = res.headers.get('content-type') || '';
+      const isJson = ct.includes('application/json');
       if (!res.ok) {
-        const err = (json && (json.error || json.message)) ? (json.error || json.message) : text;
-        throw new Error(err || (res.status + ' ' + res.statusText));
+        let details = '';
+        try { details = isJson ? (await res.json()).error : await res.text(); } catch {}
+        throw new Error(details || (res.status + ' ' + res.statusText));
       }
-      return json || {};
+      return isJson ? await res.json() : {};
     }
 
     submitBtn.addEventListener('click', async () => {
@@ -122,31 +123,29 @@
         const compressed = await compressImage(file);
         const photoBlob = compressed || file;
 
-        // ✅ Use FormData instead of base64 to avoid size/encoding issues
-        const fd = new FormData();
-        fd.append('file', photoBlob, 'ticket.jpg');
+        const arrayBuffer = await photoBlob.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = '';
+        for (let i=0; i<bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const base64 = btoa(binary);
 
-        const uploadRes = await fetchJsonOrText('/.netlify/functions/uploadPhoto', {
+        const uploadRes = await fetchJson('/.netlify/functions/uploadPhoto', {
           method: 'POST',
-          body: fd,
-          cache: 'no-store'
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ base64, contentType: 'image/jpeg' })
         });
 
-        const photo_url = uploadRes.publicUrl || uploadRes.public_url || uploadRes.url;
-        if (!photo_url) {
-          throw new Error('Upload did not return publicUrl.');
-        }
+        const photo_path = uploadRes.path || uploadRes.file || uploadRes.filename;
 
-        const createRes = await fetchJsonOrText('/.netlify/functions/createTicket', {
+        const createRes = await fetchJson('/.netlify/functions/createTicket', {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
             tech_name, location_friendly, description,
             lat: coords ? coords.lat : null,
             lon: coords ? coords.lon : null,
-            photo_url
-          }),
-          cache: 'no-store'
+            photo_path
+          })
         });
 
         const id = createRes.id || (createRes.ticket && createRes.ticket.id);
