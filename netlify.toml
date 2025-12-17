@@ -1,29 +1,3 @@
 [build]
   publish = "public"
   functions = "netlify/functions"
-
-# Scheduled 5pm report (0 22 * * * = 5pm ET when runtime uses UTC; adjust if needed)
-[functions."dailyReport"]
-  schedule = "0 22 * * *"
-
-# Friendly short links
-[[redirects]]
-  from = "/New"
-  to = "/new.html"
-  status = 200
-
-[[redirects]]
-  from = "/Dashboard"
-  to = "/dashboard.html"
-  status = 200
-
-# Reduce stale cache on phones (prevents some users running old broken HTML)
-[[headers]]
-  for = "/*.html"
-  [headers.values]
-    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
-
-[[headers]]
-  for = "/*.js"
-  [headers.values]
-    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
