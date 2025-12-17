@@ -1,43 +1,86 @@
-const { supabase, json } = require('./_lib');
+// netlify/functions/createTicket.js
+// Creates a ticket and (optionally) attaches the uploaded photo path to ticket_photos.
+// Sends a GroupMe alert with ticket link + description (+ photo link).
+const { getSb } = require("./sb");
+const { ok, bad, server, sendToGroupMe, ticketUrl } = require("./_lib");
 
 exports.handler = async (event) => {
+  if (event.httpMethod === "OPTIONS") return ok({});
+  if (event.httpMethod !== "POST") return bad("Use POST");
+
   try {
-    const body = JSON.parse(event.body || '{}');
+    const body = JSON.parse(event.body || "{}");
+    const tech_name = (body.tech_name || "").trim();
+    const location_friendly = (body.location_friendly || "").trim();
+    const description = (body.description || "").trim();
+    const lat = body.lat ?? null;
+    const lon = body.lon ?? null;
+    const photo_path = body.photo_path || body.photoPath || null;
+    const photo_url = body.photo_url || body.photoUrl || null;
 
-    const { data: dupes } = await supabase
-      .from('tickets')
-      .select('*')
-      .eq('status', 'open')
-      .ilike('location_friendly', body.location_friendly);
-
-    if (dupes && dupes.length) {
-      return json(409, { duplicate: true, tickets: dupes });
+    if (!tech_name || !location_friendly || !description) {
+      return bad("Missing required fields");
     }
 
-    const { data, error } = await supabase
-      .from('tickets')
-      .insert({
-        tech_name: body.tech_name,
-        location_friendly: body.location_friendly,
-        description: body.description,
-        lat: body.lat,
-        lon: body.lon,
-        status: 'open'
-      })
-      .select()
+    const sb = getSb();
+
+    const { data: ticket, error: tErr } = await sb
+      .from("tickets")
+      .insert([{ tech_name, location_friendly, description, lat, lon, status: "open" }])
+      .select("*")
       .single();
 
-    if (error) throw error;
+    if (tErr) return server("Ticket insert failed", { details: tErr.message });
 
-    if (body.photo_path) {
-      await supabase.from('ticket_photos').insert({
-        ticket_id: data.id,
-        photo_url: body.photo_path
-      });
+    let attachedPublicUrl = null;
+
+    // If frontend uploaded photo to storage, attach it to ticket_photos table
+    const storagePath = photo_path || null;
+    if (storagePath) {
+      const { data: pub } = sb.storage.from("ticket-photos").getPublicUrl(storagePath);
+      attachedPublicUrl = pub?.publicUrl || null;
+
+      // ticket_photos schema: ticket_id, file_path, public_url
+      const { error: tpErr } = const { error: tpErr2 } = await sb.from("ticket_photos").insert([{
+
+        ticket_id: ticket.id,
+        file_path: storagePath,
+        public_url: attachedPublicUrl
+      }]);
+      // Ignore missing ticket_photos table
+      // eslint-disable-next-line no-unused-vars
+      const _ignore = tpErr;
+    } else if (photo_url) {
+      attachedPublicUrl = photo_url;
+      await sb.from("ticket_photos").insert([{
+        ticket_id: ticket.id,
+        file_path: null,
+        public_url: attachedPublicUrl
+      }]);
     }
 
-    return json(200, { ticket: data });
+    
+    // Also store legacy photo_url directly on ticket row (older UI expects this).
+    if (attachedPublicUrl) {
+      await sb.from("tickets").update({ photo_url: attachedPublicUrl }).eq("id", ticket.id);
+    }
+
+// GroupMe alert
+    const lines = [
+      "🟢 New Ticket Created",
+      `#${ticket.id} – ${ticket.location_friendly}`,
+      "",
+      description.length > 220 ? (description.slice(0, 220) + "…") : description,
+      "",
+      ticketUrl(ticket.id),
+    ];
+    if (attachedPublicUrl) {
+      lines.push("", "Photo:", attachedPublicUrl);
+    }
+    await sendToGroupMe(lines.join("\n"));
+
+    return ok({ ticket, id: ticket.id });
   } catch (e) {
-    return json(500, { error: e.message });
+    return server("Create ticket error", { details: String(e?.message || e) });
   }
 };

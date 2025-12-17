@@ -1,13 +1,14 @@
 {
-  "name": "christmastech",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "@supabase/supabase-js": "^2.39.3",
-    "node-fetch": "^3.3.2"
-  },
+  "name": "christmas-lights-ticket-bot",
+  "version": "1.0.2",
+  "description": "Christmas techs lights-out ticket system with GroupMe + Netlify + Supabase and map dashboard",
+  "main": "index.js",
   "scripts": {
     "build": "echo \"No build step\"",
     "dev": "netlify dev"
+  },
+  "dependencies": {
+    "@netlify/functions": "^2.0.0",
+    "@supabase/supabase-js": "^2.48.0"
   }
 }

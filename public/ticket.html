@@ -99,10 +99,7 @@
       <div class="row" style="margin-bottom:.75rem;">
         <div style="flex:1;min-width:240px;">
           <label for="commentBody">Add an update</label>
-          <textarea id="commentBody" placeholder="What changed? What did you test? Any parts needed?"></textarea>
-
-          <label style="display:block;margin-top:0.75rem;" for="comment_photo">Attach photo (optional)</label>
-          <input id="comment_photo" type="file" accept="image/*" />
+          \1\n\n<label style="display:block;margin-top:0.75rem;">Attach photo (optional)</label>\n<input id="comment_photo" type="file" accept="image/*" />
         </div>
       </div>
 
@@ -121,64 +118,64 @@
   ></script>
 
   <script>
-    const qs = new URLSearchParams(location.search);
-    const ticketId = qs.get('id');
+    const qs=new URLSearchParams(location.search);
+    const ticketId=qs.get('id');
 
-    const statusMsg = document.getElementById('statusMsg');
-    const ticketCard = document.getElementById('ticketCard');
-    const photosCard = document.getElementById('photosCard');
-    const commentsCard = document.getElementById('commentsCard');
-    const mapCard = document.getElementById('mapCard');
+    const statusMsg=document.getElementById('statusMsg');
+    const ticketCard=document.getElementById('ticketCard');
+    const photosCard=document.getElementById('photosCard');
+    const commentsCard=document.getElementById('commentsCard');
+    const mapCard=document.getElementById('mapCard');
 
-    const ticketIdLabel = document.getElementById('ticketIdLabel');
-    const locationFriendly = document.getElementById('locationFriendly');
-    const metaLine = document.getElementById('metaLine');
-    const descriptionEl = document.getElementById('description');
-    const statusPill = document.getElementById('statusPill');
+    const ticketIdLabel=document.getElementById('ticketIdLabel');
+    const locationFriendly=document.getElementById('locationFriendly');
+    const metaLine=document.getElementById('metaLine');
+    const descriptionEl=document.getElementById('description');
+    const statusPill=document.getElementById('statusPill');
 
-    const btnFix = document.getElementById('btnFix');
-    const btnReopen = document.getElementById('btnReopen');
-    const btnViewMap = document.getElementById('btnViewMap');
+    const btnFix=document.getElementById('btnFix');
+    const btnReopen=document.getElementById('btnReopen');
+    const btnViewMap=document.getElementById('btnViewMap');
 
-    const photoGrid = document.getElementById('photoGrid');
+    const photoGrid=document.getElementById('photoGrid');
 
-    const commentAuthor = document.getElementById('commentAuthor');
-    const commentBody = document.getElementById('commentBody');
-    const btnAddComment = document.getElementById('btnAddComment');
-    const commentList = document.getElementById('commentList');
-    const commentPostMsg = document.getElementById('commentPostMsg');
+    const commentAuthor=document.getElementById('commentAuthor');
+    const commentBody=document.getElementById('commentBody');
+    const btnAddComment=document.getElementById('btnAddComment');
+    const commentList=document.getElementById('commentList');
+    const commentPostMsg=document.getElementById('commentPostMsg');
 
-    const openInMaps = document.getElementById('openInMaps');
-    const coordsLine = document.getElementById('coordsLine');
+    const openInMaps=document.getElementById('openInMaps');
+    const coordsLine=document.getElementById('coordsLine');
 
-    const savedName = localStorage.getItem('ticket_comment_author');
-    if (savedName) commentAuthor.value = savedName;
+    const savedName=localStorage.getItem('ticket_comment_author');
+    if(savedName) commentAuthor.value=savedName;
 
     function esc(s){return (s??'').toString().replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');}
 
     function setPill(status){
-      status = (status || 'open').toLowerCase();
-      statusPill.className = 'pill ' + status;
-      statusPill.textContent = status;
-      btnFix.style.display = status === 'open' ? 'inline-block' : 'none';
-      btnReopen.style.display = status === 'fixed' ? 'inline-block' : 'none';
+      status=(status||'open').toLowerCase();
+      statusPill.className='pill '+status;
+      statusPill.textContent=status;
+      btnFix.style.display=status==='open'?'inline-block':'none';
+      btnReopen.style.display=status==='fixed'?'inline-block':'none';
     }
 
-    async function fetchJson(url, opts){
-      const res = await fetch(url, opts);
-      const ct = res.headers.get('content-type') || '';
-      const isJson = ct.includes('application/json');
+    async function fetchJson(url,opts){
+      const res=await fetch(url,opts);
+      const ct=res.headers.get('content-type')||'';
+      const isJson=ct.includes('application/json');
       if(!res.ok){
-        let details = '';
-        try{ details = isJson ? (await res.json()).error : await res.text(); }catch{}
-        throw new Error('HTTP ' + res.status + ': ' + (details || res.statusText));
+        let details='';
+        try{details=isJson?(await res.json()).error:await res.text();}catch{}
+        throw new Error('HTTP '+res.status+': '+(details||res.statusText));
       }
-      if(!isJson) throw new Error('Expected JSON but got ' + ct);
+      if(!isJson) throw new Error('Expected JSON but got '+ct);
       return await res.json();
     }
 
-    let map = null;
-    let marker = null;
+    let map=null;
+    let marker=null;
 
     function initOrUpdateMap(lat, lon, title){
       if(!map){
@@ -198,151 +195,114 @@
       }
       marker.bindPopup(title || 'Ticket location').openPopup();
 
+      // Leaflet needs a resize after showing hidden container
       setTimeout(()=>{ try{ map.invalidateSize(); }catch{} }, 150);
     }
 
-    function renderComments(comments){
-      if(!comments.length){
-        commentList.innerHTML = '<div class="muted">No comments yet.</div>';
-        return;
-      }
-
-      commentList.innerHTML = comments.map(c=>{
-        const when = c.created_at ? new Date(c.created_at).toLocaleString() : '';
-        const body = esc(c.body || c.comment || '');
-        const author = esc(c.author || 'Unknown');
-
-        // If your API returns a photo url for comment photos, display it when present.
-        const photoUrl = c.photo_url || c.photoUrl || c.url || c.image_url || '';
-        const photoHtml = photoUrl
-          ? `<div style="margin-top:.5rem;">
-               <a href="${esc(photoUrl)}" target="_blank" rel="noopener noreferrer">
-                 <img class="photo" src="${esc(photoUrl)}" alt="Comment photo" />
-               </a>
-             </div>`
-          : '';
-
-        return `
-          <div class="comment">
-            <div><strong>${author}</strong> <span class="muted">${esc(when)}</span></div>
-            <div style="margin-top:.25rem;">${body}</div>
-            ${photoHtml}
-          </div>
-        `;
-      }).join('');
-    }
-
     async function loadTicket(){
-      if(!ticketId){
-        statusMsg.innerHTML = '<span class="error">Missing ticket id.</span>';
-        return;
-      }
-
-      ticketIdLabel.textContent = ' (#' + ticketId + ')';
-      statusMsg.textContent = 'Loading ticket...';
+      if(!ticketId){statusMsg.innerHTML='<span class="error">Missing ticket id.</span>';return;}
+      ticketIdLabel.textContent=' (#'+ticketId+')';
+      statusMsg.textContent='Loading ticket...';
 
       try{
-        const data = await fetchJson('/.netlify/functions/getTicket?id=' + encodeURIComponent(ticketId));
-        const t = data.ticket;
+        const data=await fetchJson('/.netlify/functions/getTicket?id='+encodeURIComponent(ticketId));
+        const t=data.ticket;
 
-        locationFriendly.textContent = t.location_friendly || '(no location)';
-        const created = t.created_at ? new Date(t.created_at).toLocaleString() : '';
-        metaLine.textContent = 'Reported by ' + (t.tech_name || 'Unknown') + (created ? ' on ' + created : '');
-        descriptionEl.textContent = t.description || '';
+        locationFriendly.textContent=t.location_friendly||'(no location)';
+        const created=t.created_at?new Date(t.created_at).toLocaleString():'';
+        metaLine.textContent='Reported by '+(t.tech_name||'Unknown')+(created?' on '+created:'');
+        descriptionEl.textContent=t.description||'';
         setPill(t.status);
 
-        ticketCard.style.display = 'block';
+        ticketCard.style.display='block';
 
         // Map
         const hasCoords = (t.lat != null && t.lon != null);
         if(hasCoords){
-          btnViewMap.style.display = 'inline-block';
-          mapCard.style.display = 'none';
+          btnViewMap.style.display='inline-block';
+          mapCard.style.display='none'; // starts hidden until click
           const gmaps = `https://www.google.com/maps?q=${encodeURIComponent(t.lat + ',' + t.lon)}`;
           openInMaps.href = gmaps;
           openInMaps.style.display = 'inline-block';
-          coordsLine.textContent = `GPS: ${Number(t.lat).toFixed(6)}, ${Number(t.lon).toFixed(6)}`;
+          coordsLine.textContent = `GPS: ${t.lat.toFixed(6)}, ${t.lon.toFixed(6)}`;
 
           btnViewMap.onclick = () => {
             mapCard.style.display = 'block';
+            // Scroll into view
             mapCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            initOrUpdateMap(Number(t.lat), Number(t.lon), `Ticket #${t.id} – ${t.location_friendly || ''}`);
+            initOrUpdateMap(t.lat, t.lon, `Ticket #${t.id} – ${t.location_friendly || ''}`);
           };
         } else {
-          btnViewMap.style.display = 'none';
-          mapCard.style.display = 'none';
+          btnViewMap.style.display='none';
+          mapCard.style.display='none';
         }
 
         // Photos
-        photoGrid.innerHTML = '';
-        const photos = data.photos || [];
+        photoGrid.innerHTML='';
+        const photos=data.photos||[];
         if(photos.length){
           for(const p of photos){
-            const url = p.photo_url || p.url || p.image_url;
+            const url=p.photo_url||p.url||p.image_url;
             if(!url) continue;
-            const a = document.createElement('a');
-            a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
-            const img = document.createElement('img');
-            img.className = 'photo'; img.src = url; img.alt = 'Ticket photo';
-            a.appendChild(img);
-            photoGrid.appendChild(a);
+            const a=document.createElement('a');
+            a.href=url; a.target='_blank'; a.rel='noopener noreferrer';
+            const img=document.createElement('img');
+            img.className='photo'; img.src=url; img.alt='Ticket photo';
+            a.appendChild(img); photoGrid.appendChild(a);
           }
-          photosCard.style.display = 'block';
+          photosCard.style.display='block';
         } else {
-          photosCard.style.display = 'none';
+          photosCard.style.display='none';
         }
 
-        renderComments(data.comments || []);
-        commentsCard.style.display = 'block';
-
-        statusMsg.textContent = '';
+        renderComments(data.comments||[]);
+        commentsCard.style.display='block';
+        statusMsg.textContent='';
       }catch(err){
         console.error(err);
-        statusMsg.innerHTML = '<span class="error">Network error loading ticket. ' + esc(err.message) + '</span>';
-        ticketCard.style.display='none';
-        photosCard.style.display='none';
-        commentsCard.style.display='none';
-        mapCard.style.display='none';
+        statusMsg.innerHTML='<span class="error">Network error loading ticket. '+esc(err.message)+'</span>';
+        ticketCard.style.display='none'; photosCard.style.display='none'; commentsCard.style.display='none'; mapCard.style.display='none';
       }
+    }
+
+    function renderComments(comments){
+      if(!comments.length){commentList.innerHTML='<div class="muted">No comments yet.</div>';return;}
+      commentList.innerHTML=comments.map(c=>{
+        const when=c.created_at?new Date(c.created_at).toLocaleString():'';
+        return '<div class="comment"><div><strong>'+esc(c.author||'Unknown')+'</strong> <span class="muted">'+esc(when)+'</span></div><div style="margin-top:.25rem;">'+esc(c.body||'')+'</div></div>';
+      }).join('');
     }
 
     async function updateStatus(newStatus){
       try{
-        statusMsg.textContent = 'Updating status...';
-        await fetchJson('/.netlify/functions/updateTicketStatus', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ id: ticketId, status: newStatus })
-        });
+        statusMsg.textContent='Updating status...';
+        await fetchJson('/.netlify/functions/updateTicketStatus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:ticketId,status:newStatus})});
         await loadTicket();
       }catch(err){
-        statusMsg.innerHTML = '<span class="error">Failed to update status. ' + esc(err.message) + '</span>';
+        statusMsg.innerHTML='<span class="error">Failed to update status. '+esc(err.message)+'</span>';
       }
     }
 
-    btnFix.addEventListener('click', ()=>updateStatus('fixed'));
-    btnReopen.addEventListener('click', ()=>updateStatus('open'));
+    btnFix.addEventListener('click',()=>updateStatus('fixed'));
+    btnReopen.addEventListener('click',()=>updateStatus('open'));
 
     btnAddComment.addEventListener('click', async () => {
-      const author = (commentAuthor.value || '').trim();
-      const comment = (commentBody.value || '').trim();
-      const fileEl = document.getElementById('comment_photo');
-      const file = fileEl && fileEl.files ? fileEl.files[0] : null;
+      const author = (document.getElementById('comment_author').value || '').trim();
+      const comment = (document.getElementById('comment_body').value || '').trim();
+      const file = document.getElementById('comment_photo') ? document.getElementById('comment_photo').files[0] : null;
 
-      if(!author || !comment){
+      if (!author || !comment) {
         alert('Please enter your name and an update.');
         return;
       }
 
-      localStorage.setItem('ticket_comment_author', author);
-
       btnAddComment.disabled = true;
-      commentPostMsg.textContent = 'Posting...';
 
-      try{
+      try {
         let photo_path = null;
 
-        if(file){
+        if (file) {
+          // upload comment photo
           const arrayBuffer = await file.arrayBuffer();
           const bytes = new Uint8Array(arrayBuffer);
           let binary = '';
@@ -354,7 +314,6 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ base64, contentType: file.type || 'image/jpeg' })
           });
-
           photo_path = up.path || up.file || null;
         }
 
@@ -364,20 +323,20 @@
           body: JSON.stringify({ ticket_id: ticketId, author, comment, photo_path })
         });
 
-        commentBody.value = '';
-        if(fileEl) fileEl.value = '';
+        document.getElementById('comment_body').value = '';
+        if (document.getElementById('comment_photo')) document.getElementById('comment_photo').value = '';
 
-        commentPostMsg.textContent = '';
         await loadTicket();
-      }catch(e){
+      } catch (e) {
         console.error(e);
-        commentPostMsg.innerHTML = '<span class="error">Could not post comment: ' + esc(e.message || e) + '</span>';
-      }finally{
+        alert('Could not post comment: ' + (e.message || e));
+      } finally {
         btnAddComment.disabled = false;
       }
     });
 
     loadTicket();
   </script>
+
 </body>
 </html>
