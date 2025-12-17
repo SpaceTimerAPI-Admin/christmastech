@@ -1,57 +1,81 @@
 // netlify/functions/addComment.js
-// Adds a comment/update to a ticket. Optional photo attachment.
-// Sends GroupMe alert (comment/update).
-const { getSb } = require("./sb");
-const { ok, bad, server, sendToGroupMe, ticketUrl } = require("./_lib");
+// Adds a comment/update to a ticket. Optionally attaches a photo (stores in comment_photos).
+const { createClient } = require('@supabase/supabase-js');
+
+function json(statusCode, bodyObj) {
+  return {
+    statusCode,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'POST,OPTIONS',
+    },
+    body: JSON.stringify(bodyObj),
+  };
+}
+
+function parseJsonBody(event) {
+  if (!event.body) return null;
+  const raw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
+  return JSON.parse(raw);
+}
 
 exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") return ok({});
-  if (event.httpMethod !== "POST") return bad("Use POST");
+  if (event.httpMethod === 'OPTIONS') return json(200, { ok: true });
 
   try {
-    const body = JSON.parse(event.body || "{}");
-    const ticket_id = body.ticket_id || body.ticketId;
-    const author = (body.author || "").trim();
-    const comment = (body.comment || body.body || "").trim();
-    const photo_path = body.photo_path || body.photoPath || null;
-    const photo_url = body.photo_url || body.photoUrl || null;
-
-    if (!ticket_id) return bad("Missing ticket_id");
-    if (!author || !comment) return bad("Missing author or comment");
-
-    const sb = getSb();
-
-    let attachedPublicUrl = null;
-    if (photo_path) {
-      const { data: pub } = sb.storage.from("ticket-photos").getPublicUrl(photo_path);
-      attachedPublicUrl = pub?.publicUrl || null;
-    } else if (photo_url) {
-      attachedPublicUrl = photo_url;
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return json(500, { error: 'Missing Supabase env vars.' });
     }
 
-    const { data: row, error } = await sb
-      .from("ticket_comments")
-      .insert([{ ticket_id, author, body: comment, photo_url: attachedPublicUrl }])
-      .select("*")
+    let payload;
+    try {
+      payload = parseJsonBody(event);
+    } catch (e) {
+      const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString('utf8') : (event.body || '');
+      return json(400, { error: 'Request body must be JSON.', rawPreview: raw.slice(0, 80) });
+    }
+
+    const ticket_id = payload?.ticket_id ?? payload?.id;
+    const author = String(payload?.author || '').trim();
+    const body = String(payload?.comment || payload?.body || '').trim();
+    const photo_path = payload?.photo_path || null;
+
+    if (!ticket_id || !author || !body) {
+      return json(400, { error: 'Missing required fields (ticket_id, author, comment).' });
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
+
+    const { data: commentRow, error: cErr } = await supabase
+      .from('ticket_comments')
+      .insert([{ ticket_id: Number(ticket_id), author, body }])
+      .select('*')
       .single();
 
-    if (error) return server("Add comment failed", { details: error.message });
+    if (cErr) return json(500, { error: 'Add comment failed', details: cErr.message || cErr });
 
-    const lines = [
-      "📝 Ticket Update",
-      `#${ticket_id} – ${author}`,
-      "",
-      comment.length > 240 ? (comment.slice(0, 240) + "…") : comment,
-      "",
-      ticketUrl(ticket_id),
-    ];
-    if (attachedPublicUrl) {
-      lines.push("", "Photo:", attachedPublicUrl);
+    if (photo_path) {
+      const bucket = 'ticket-photos';
+      const { data: pub } = supabase.storage.from(bucket).getPublicUrl(photo_path);
+      const photo_url = pub?.publicUrl || null;
+
+      const { error: cpErr } = await supabase
+        .from('comment_photos')
+        .insert([{ comment_id: commentRow.id, ticket_id: Number(ticket_id), photo_url }]);
+
+      if (cpErr) {
+        return json(200, { ok: true, comment: commentRow, warn: 'Comment added but photo record insert failed', photoInsertError: cpErr.message || cpErr });
+      }
     }
-    await sendToGroupMe(lines.join("\n"));
 
-    return ok({ comment: row });
-  } catch (e) {
-    return server("Add comment error", { details: String(e?.message || e) });
+    return json(200, { ok: true, comment: commentRow });
+  } catch (err) {
+    return json(500, { error: 'Server error', details: err?.message || String(err) });
   }
 };
