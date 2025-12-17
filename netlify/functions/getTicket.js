@@ -1,11 +1,26 @@
 // netlify/functions/getTicket.js
-// Robust ticket fetch: never 500s due to optional tables (ticket_photos, ticket_comments, comment_photos).
-const { json, supabaseAdmin, SITE_BASE_URL, safeTicketUrl } = require('./_lib');
+// Robust ticket fetch: does NOT depend on _lib.json (some repos don't export it).
+const { supabaseAdmin } = require('./_lib');
+
+function resp(statusCode, bodyObj) {
+  return {
+    statusCode,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'GET,OPTIONS',
+    },
+    body: JSON.stringify(bodyObj),
+  };
+}
 
 exports.handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') return resp(200, { ok: true });
+
   try {
     const id = event.queryStringParameters && event.queryStringParameters.id;
-    if (!id) return json(400, { error: 'Missing id' });
+    if (!id) return resp(400, { error: 'Missing id' });
 
     const supabase = supabaseAdmin();
 
@@ -16,13 +31,10 @@ exports.handler = async (event) => {
       .eq('id', id)
       .single();
 
-    if (ticketErr || !ticket) {
-      return json(404, { error: 'Ticket not found' });
-    }
+    if (ticketErr || !ticket) return resp(404, { error: 'Ticket not found' });
 
     // 2) Photos (optional)
     let photos = [];
-    // Prefer ticket_photos table if it exists
     try {
       const { data: tPhotos, error: pErr } = await supabase
         .from('ticket_photos')
@@ -31,31 +43,35 @@ exports.handler = async (event) => {
         .order('created_at', { ascending: true });
 
       if (!pErr && Array.isArray(tPhotos)) {
-        photos = tPhotos.map(p => ({
-          id: p.id,
-          ticket_id: p.ticket_id,
-          photo_url: p.photo_url || p.path || null,
-          created_at: p.created_at
-        })).filter(p => p.photo_url);
+        photos = tPhotos
+          .map((p) => ({
+            id: p.id,
+            ticket_id: p.ticket_id,
+            photo_url: p.photo_url || p.path || null,
+            created_at: p.created_at,
+          }))
+          .filter((p) => p.photo_url);
       }
-      // If table missing or fails, we just fall back below
-    } catch (_) {}
+    } catch (_) {
+      // ignore
+    }
 
     // Legacy fallback: tickets.photo_url
     if ((!photos || photos.length === 0) && ticket.photo_url) {
-      photos = [{
-        id: null,
-        ticket_id: ticket.id,
-        photo_url: ticket.photo_url,
-        created_at: ticket.created_at
-      }];
+      photos = [
+        {
+          id: null,
+          ticket_id: ticket.id,
+          photo_url: ticket.photo_url,
+          created_at: ticket.created_at,
+        },
+      ];
     }
 
-    // 3) Comments (optional)
+    // 3) Comments (optional) – try multiple table names
     let comments = [];
-    // Some earlier versions used ticket_comments; others used comments.
-    const commentTablesToTry = ['ticket_comments', 'comments'];
-    for (const table of commentTablesToTry) {
+    const tables = ['ticket_comments', 'comments'];
+    for (const table of tables) {
       try {
         const { data: c, error: cErr } = await supabase
           .from(table)
@@ -64,23 +80,25 @@ exports.handler = async (event) => {
           .order('created_at', { ascending: true });
 
         if (!cErr && Array.isArray(c)) {
-          comments = c.map(row => ({
+          comments = c.map((row) => ({
             id: row.id,
             ticket_id: row.ticket_id,
             author: row.author,
             body: row.body,
             created_at: row.created_at,
-            updated_at: row.updated_at
+            updated_at: row.updated_at,
           }));
           break;
         }
-      } catch (_) {}
+      } catch (_) {
+        // try next table
+      }
     }
 
-    // 4) Comment photos (optional) -> attach to comments[] as photos:[{photo_url,...}]
+    // 4) Comment photos (optional)
     if (comments.length) {
       try {
-        const commentIds = comments.map(c => c.id).filter(Boolean);
+        const commentIds = comments.map((c) => c.id).filter(Boolean);
         if (commentIds.length) {
           const { data: cp, error: cpErr } = await supabase
             .from('comment_photos')
@@ -89,34 +107,30 @@ exports.handler = async (event) => {
             .in('comment_id', commentIds)
             .order('created_at', { ascending: true });
 
+          const byComment = new Map();
           if (!cpErr && Array.isArray(cp)) {
-            const byComment = new Map();
             for (const row of cp) {
               if (!byComment.has(row.comment_id)) byComment.set(row.comment_id, []);
               byComment.get(row.comment_id).push({
                 id: row.id,
                 photo_url: row.photo_url,
-                created_at: row.created_at
+                created_at: row.created_at,
               });
             }
-            comments = comments.map(c => ({
-              ...c,
-              photos: byComment.get(c.id) || []
-            }));
-          } else {
-            comments = comments.map(c => ({ ...c, photos: [] }));
           }
+
+          comments = comments.map((c) => ({ ...c, photos: byComment.get(c.id) || [] }));
         } else {
-          comments = comments.map(c => ({ ...c, photos: [] }));
+          comments = comments.map((c) => ({ ...c, photos: [] }));
         }
       } catch (_) {
-        comments = comments.map(c => ({ ...c, photos: [] }));
+        comments = comments.map((c) => ({ ...c, photos: [] }));
       }
     }
 
-    return json(200, { ticket, photos, comments });
+    return resp(200, { ticket, photos, comments });
   } catch (err) {
     console.error('getTicket fatal', err);
-    return json(500, { error: 'Server error' });
+    return resp(500, { error: 'Server error' });
   }
 };
