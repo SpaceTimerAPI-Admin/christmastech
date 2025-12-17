@@ -2,6 +2,24 @@
   publish = "public"
   functions = "netlify/functions"
 
-# 5pm Eastern report (Netlify schedules run in UTC). 5pm ET = 22:00 UTC during Standard Time.
-[functions."dailyReport"]
-  schedule = "0 22 * * *"
+# Friendly short links (optional)
+[[redirects]]
+  from = "/New"
+  to = "/new.html"
+  status = 200
+
+[[redirects]]
+  from = "/Dashboard"
+  to = "/dashboard.html"
+  status = 200
+
+# Reduce stale cache on phones (prevents some users running old broken HTML)
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
