@@ -1,4 +1,4 @@
-rror<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -33,7 +33,7 @@ rror<!DOCTYPE html>
       max-width: 360px;
       border-radius: 16px;
       border: 1px solid #1e2640;
-      margin-bottom: 18px;
+      margin-bottom: 14px;
     }
 
     h1 {
@@ -44,12 +44,31 @@ rror<!DOCTYPE html>
 
     .subtitle {
       color: #a7a7a7;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
 
     .footer {
       font-size: 1.05rem;
-      margin-top: 12px;
+      margin-top: 14px;
+    }
+
+    .play-btn {
+      margin-top: 10px;
+      background: #55d6ff;
+      color: #000;
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 22px;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.4);
+    }
+
+    .play-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 18px rgba(0,0,0,0.5);
     }
 
     iframe {
@@ -71,7 +90,9 @@ rror<!DOCTYPE html>
       alt="Elijah dancing"
     />
 
-    <h1>Error. 404.</h1>
+    <button class="play-btn" id="playMusic">▶ Play Music</button>
+
+    <h1>404</h1>
     <div class="subtitle">Maintenance Mode</div>
 
     <div class="footer">
@@ -79,11 +100,22 @@ rror<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- Attempt unmuted autoplay on load -->
   <iframe
-    src="https://www.youtube.com/embed/1H-slVEJcN4?autoplay=1&loop=1&playlist=1H-slVEJcN4&controls=0&rel=0"
+    id="musicFrame"
     allow="autoplay; encrypted-media"
   ></iframe>
+
+  <script>
+    const btn = document.getElementById('playMusic');
+    const frame = document.getElementById('musicFrame');
+
+    btn.addEventListener('click', () => {
+      frame.src =
+        "https://www.youtube.com/embed/1H-slVEJcN4?autoplay=1&loop=1&playlist=1H-slVEJcN4&controls=0&rel=0";
+      btn.textContent = "🎶 Now Playing";
+      btn.disabled = true;
+    });
+  </script>
 
 </body>
 </html>
