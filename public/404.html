@@ -34,57 +34,40 @@
       max-width: 360px;
       border-radius: 16px;
       border: 1px solid #1e2640;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 42px;
+      margin: 12px 0 6px;
+      letter-spacing: 1px;
+    }
+
+    .subtitle {
+      color: #a7a7a7;
       margin-bottom: 12px;
     }
 
-    .btn {
-      margin-top: 6px;
-      background: #55d6ff;
-      color: #000;
-      border: 0;
-      border-radius: 999px;
-      padding: 10px 22px;
-      font-size: 1rem;
-      font-weight: 800;
-      cursor: pointer;
-      box-shadow: 0 6px 14px rgba(0,0,0,0.4);
+    .footer {
+      font-size: 1.05rem;
+      margin-top: 14px;
     }
-    .btn.secondary {
-      background: #1e2640;
-      color: #f7f7f7;
-      border: 1px solid #2a355a;
-      margin-left: 8px;
-    }
-    .btn:disabled {
-      opacity: 0.75;
-      cursor: default;
-    }
-
-    h1 { font-size: 42px; margin: 14px 0 6px; letter-spacing: 1px; }
-    .subtitle { color: #a7a7a7; margin-bottom: 12px; }
-    .footer { font-size: 1.05rem; margin-top: 14px; }
 
     .hint {
       margin-top: 10px;
       font-size: 0.9rem;
       color: #9fb7ff;
+      display: none;
     }
   </style>
 </head>
-
 <body>
+
   <div class="container">
     <img
       src="https://fdhfdjzuscdkcvvxmzqg.supabase.co/storage/v1/object/public/ticket-photos/IMG_1441.gif"
       alt="Elijah dancing"
     />
-
-    <div>
-      <button class="btn" id="playBtn">▶ Play Music</button>
-      <button class="btn secondary" id="pauseBtn" disabled>⏸ Pause</button>
-    </div>
-
-    <div class="hint" id="hint">Tap Play to start the music.</div>
 
     <h1>404</h1>
     <div class="subtitle">Maintenance Mode</div>
@@ -92,51 +75,50 @@
     <div class="footer">
       The ticket system is currently down for maintenance, please enjoy Elijah dancing.
     </div>
+
+    <div class="hint" id="hint">
+      Tap anywhere to enable audio 🔊
+    </div>
   </div>
 
   <audio
     id="bgAudio"
-    preload="auto"
+    src="https://fdhfdjzuscdkcvvxmzqg.supabase.co/storage/v1/object/public/ticket-photos/WILLOW%20-%20Wait%20A%20Minute!%20(Lyrics).mp3"
+    autoplay
     loop
     playsinline
-    crossorigin="anonymous"
-    src="https://fdhfdjzuscdkcvvxmzqg.supabase.co/storage/v1/object/public/ticket-photos/WILLOW%20-%20Wait%20A%20Minute!%20(Lyrics).mp3">
+    preload="auto">
   </audio>
 
   <script>
     const audio = document.getElementById('bgAudio');
-    const playBtn = document.getElementById('playBtn');
-    const pauseBtn = document.getElementById('pauseBtn');
     const hint = document.getElementById('hint');
 
-    async function startAudio() {
+    async function tryAutoplay() {
       try {
-        await audio.play(); // must be from user gesture on mobile
-        playBtn.disabled = true;
-        pauseBtn.disabled = false;
-        playBtn.textContent = "🎶 Playing";
-        hint.textContent = "Music is playing.";
+        await audio.play();
+        // Autoplay worked (desktop / permissive browser)
       } catch (e) {
-        // Usually only fails if the browser still thinks it wasn't a user gesture
-        playBtn.disabled = false;
-        pauseBtn.disabled = true;
-        hint.textContent = "If it didn’t start, tap Play again (mobile audio policies).";
+        // Autoplay blocked (mobile)
+        hint.style.display = 'block';
+
+        const resume = async () => {
+          try {
+            await audio.play();
+            hint.style.display = 'none';
+            document.removeEventListener('click', resume);
+            document.removeEventListener('touchstart', resume);
+          } catch {}
+        };
+
+        document.addEventListener('click', resume);
+        document.addEventListener('touchstart', resume);
       }
     }
 
-    playBtn.addEventListener('click', () => {
-      playBtn.disabled = true;
-      hint.textContent = "Starting…";
-      startAudio();
-    });
-
-    pauseBtn.addEventListener('click', () => {
-      audio.pause();
-      playBtn.disabled = false;
-      pauseBtn.disabled = true;
-      playBtn.textContent = "▶ Play Music";
-      hint.textContent = "Paused.";
-    });
+    // Attempt autoplay on load
+    window.addEventListener('load', tryAutoplay);
   </script>
+
 </body>
 </html>
