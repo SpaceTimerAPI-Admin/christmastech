@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>404 - Maintenance</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(1200px 600px at 50% 0%, #0b1330 0%, #050814 60%);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #f7f7f7;
+      text-align: center;
+      padding: 18px;
+    }
+
+    .container {
+      background: rgba(17, 23, 42, 0.95);
+      border-radius: 20px;
+      padding: 28px 24px;
+      max-width: 520px;
+      width: 100%;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      border: 1px solid #1e2640;
+    }
+
+    img {
+      width: 100%;
+      max-width: 360px;
+      border-radius: 16px;
+      border: 1px solid #1e2640;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 42px;
+      margin: 12px 0 6px;
+      letter-spacing: 1px;
+    }
+
+    .subtitle {
+      color: #a7a7a7;
+      margin-bottom: 12px;
+    }
+
+    .footer {
+      font-size: 1.05rem;
+      margin-top: 14px;
+    }
+
+    .hint {
+      margin-top: 10px;
+      font-size: 0.9rem;
+      color: #9fb7ff;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <img
+      src="https://fdhfdjzuscdkcvvxmzqg.supabase.co/storage/v1/object/public/ticket-photos/IMG_1441.gif"
+      alt="Elijah dancing"
+    />
+
+    <h1>404</h1>
+    <div class="subtitle">Maintenance Mode</div>
+
+    <div class="footer">
+      The ticket system is currently down for maintenance, please enjoy Elijah dancing.
+    </div>
+
+    <div class="hint" id="hint">
+      Tap anywhere to enable audio 🔊
+    </div>
+  </div>
+
+  <audio
+    id="bgAudio"
+    src="https://fdhfdjzuscdkcvvxmzqg.supabase.co/storage/v1/object/public/ticket-photos/WILLOW%20-%20Wait%20A%20Minute!%20(Lyrics).mp3"
+    autoplay
+    loop
+    playsinline
+    preload="auto">
+  </audio>
+
+  <script>
+    const audio = document.getElementById('bgAudio');
+    const hint = document.getElementById('hint');
+
+    async function tryAutoplay() {
+      try {
+        await audio.play();
+        // Autoplay worked (desktop / permissive browser)
+      } catch (e) {
+        // Autoplay blocked (mobile)
+        hint.style.display = 'block';
+
+        const resume = async () => {
+          try {
+            await audio.play();
+            hint.style.display = 'none';
+            document.removeEventListener('click', resume);
+            document.removeEventListener('touchstart', resume);
+          } catch {}
+        };
+
+        document.addEventListener('click', resume);
+        document.addEventListener('touchstart', resume);
+      }
+    }
+
+    // Attempt autoplay on load
+    window.addEventListener('load', tryAutoplay);
+  </script>
+
+</body>
+</html>
