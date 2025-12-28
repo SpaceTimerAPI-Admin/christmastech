@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>404 - Maintenance</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <style>
     body {
@@ -12,90 +12,78 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       background: radial-gradient(1200px 600px at 50% 0%, #0b1330 0%, #050814 60%);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       color: #f7f7f7;
       text-align: center;
-      padding: 20px;
     }
 
-    .card {
+    .container {
       background: rgba(17, 23, 42, 0.95);
       border-radius: 20px;
-      padding: 28px 22px;
+      padding: 28px 24px;
       max-width: 520px;
-      width: 100%;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+      width: 90%;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
       border: 1px solid #1e2640;
     }
 
-    .gif {
-      margin-bottom: 18px;
-    }
-
-    .gif img {
+    img {
       width: 100%;
       max-width: 360px;
       border-radius: 16px;
       border: 1px solid #1e2640;
+      margin-bottom: 18px;
     }
 
     h1 {
-      margin: 0 0 8px 0;
       font-size: 42px;
+      margin: 0 0 6px;
       letter-spacing: 1px;
     }
 
     .subtitle {
       color: #a7a7a7;
-      margin-bottom: 18px;
-      font-size: 1rem;
+      margin-bottom: 14px;
     }
 
-    .bottom-text {
-      margin-top: 18px;
+    .footer {
       font-size: 1.05rem;
+      margin-top: 12px;
     }
 
-    /* Hide YouTube iframe */
-    .bg-audio {
+    iframe {
       position: absolute;
       width: 1px;
       height: 1px;
       left: -9999px;
       top: -9999px;
-      overflow: hidden;
+      border: 0;
     }
   </style>
 </head>
 
 <body>
 
-  <div class="card">
-    <div class="gif">
-      <img
-        src="https://fdhfdjzuscdkcvvxmzqg.supabase.co/storage/v1/object/public/ticket-photos/IMG_1441.gif"
-        alt="Elijah dancing"
-      />
-    </div>
+  <div class="container">
+    <img
+      src="https://fdhfdjzuscdkcvvxmzqg.supabase.co/storage/v1/object/public/ticket-photos/IMG_1441.gif"
+      alt="Elijah dancing"
+    />
 
     <h1>404</h1>
     <div class="subtitle">Maintenance Mode</div>
 
-    <div class="bottom-text">
+    <div class="footer">
       The ticket system is currently down for maintenance, please enjoy Elijah dancing.
     </div>
   </div>
 
-  <!-- Background music (autoplay, muted, looped) -->
-  <div class="bg-audio">
-    <iframe
-      src="https://www.youtube.com/embed/1H-slVEJcN4?autoplay=1&mute=1&loop=1&playlist=1H-slVEJcN4&controls=0&modestbranding=1&rel=0"
-      title="Background Music"
-      allow="autoplay; encrypted-media"
-      referrerpolicy="strict-origin-when-cross-origin">
-    </iframe>
-  </div>
+  <!-- Attempt unmuted autoplay on load -->
+  <iframe
+    src="https://www.youtube.com/embed/1H-slVEJcN4?autoplay=1&loop=1&playlist=1H-slVEJcN4&controls=0&rel=0"
+    allow="autoplay; encrypted-media"
+  ></iframe>
 
 </body>
 </html>
