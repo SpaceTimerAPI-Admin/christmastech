@@ -16,6 +16,7 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       color: #f7f7f7;
       text-align: center;
+      padding: 18px;
     }
 
     .container {
@@ -23,7 +24,7 @@
       border-radius: 20px;
       padding: 28px 24px;
       max-width: 520px;
-      width: 90%;
+      width: 100%;
       box-shadow: 0 20px 40px rgba(0,0,0,0.6);
       border: 1px solid #1e2640;
     }
@@ -33,27 +34,11 @@
       max-width: 360px;
       border-radius: 16px;
       border: 1px solid #1e2640;
-      margin-bottom: 14px;
-    }
-
-    h1 {
-      font-size: 42px;
-      margin: 0 0 6px;
-      letter-spacing: 1px;
-    }
-
-    .subtitle {
-      color: #a7a7a7;
       margin-bottom: 12px;
     }
 
-    .footer {
-      font-size: 1.05rem;
-      margin-top: 14px;
-    }
-
-    .play-btn {
-      margin-top: 10px;
+    .btn {
+      margin-top: 6px;
       background: #55d6ff;
       color: #000;
       border: 0;
@@ -62,60 +47,96 @@
       font-size: 1rem;
       font-weight: 800;
       cursor: pointer;
-      transition: transform 0.1s ease, box-shadow 0.1s ease;
       box-shadow: 0 6px 14px rgba(0,0,0,0.4);
     }
-
-    .play-btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 10px 18px rgba(0,0,0,0.5);
+    .btn.secondary {
+      background: #1e2640;
+      color: #f7f7f7;
+      border: 1px solid #2a355a;
+      margin-left: 8px;
+    }
+    .btn:disabled {
+      opacity: 0.75;
+      cursor: default;
     }
 
-    iframe {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      left: -9999px;
-      top: -9999px;
-      border: 0;
+    h1 { font-size: 42px; margin: 14px 0 6px; letter-spacing: 1px; }
+    .subtitle { color: #a7a7a7; margin-bottom: 12px; }
+    .footer { font-size: 1.05rem; margin-top: 14px; }
+
+    .hint {
+      margin-top: 10px;
+      font-size: 0.9rem;
+      color: #9fb7ff;
     }
   </style>
 </head>
 
 <body>
-
   <div class="container">
     <img
       src="https://fdhfdjzuscdkcvvxmzqg.supabase.co/storage/v1/object/public/ticket-photos/IMG_1441.gif"
       alt="Elijah dancing"
     />
 
-    <button class="play-btn" id="playMusic">▶ Play Music</button>
+    <div>
+      <button class="btn" id="playBtn">▶ Play Music</button>
+      <button class="btn secondary" id="pauseBtn" disabled>⏸ Pause</button>
+    </div>
 
-    <h1>Error! 404.</h1>
-    
+    <div class="hint" id="hint">Tap Play to start the music.</div>
+
+    <h1>404</h1>
+    <div class="subtitle">Maintenance Mode</div>
 
     <div class="footer">
       The ticket system is currently down for maintenance, please enjoy Elijah dancing.
     </div>
   </div>
 
-  <iframe
-    id="musicFrame"
-    allow="autoplay; encrypted-media"
-  ></iframe>
+  <audio
+    id="bgAudio"
+    preload="auto"
+    loop
+    playsinline
+    crossorigin="anonymous"
+    src="https://fdhfdjzuscdkcvvxmzqg.supabase.co/storage/v1/object/public/ticket-photos/WILLOW%20-%20Wait%20A%20Minute!%20(Lyrics).mp3">
+  </audio>
 
   <script>
-    const btn = document.getElementById('playMusic');
-    const frame = document.getElementById('musicFrame');
+    const audio = document.getElementById('bgAudio');
+    const playBtn = document.getElementById('playBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const hint = document.getElementById('hint');
 
-    btn.addEventListener('click', () => {
-      frame.src =
-        "https://www.youtube.com/embed/1H-slVEJcN4?autoplay=1&loop=1&playlist=1H-slVEJcN4&controls=0&rel=0";
-      btn.textContent = "🎶 Now Playing";
-      btn.disabled = true;
+    async function startAudio() {
+      try {
+        await audio.play(); // must be from user gesture on mobile
+        playBtn.disabled = true;
+        pauseBtn.disabled = false;
+        playBtn.textContent = "🎶 Playing";
+        hint.textContent = "Music is playing.";
+      } catch (e) {
+        // Usually only fails if the browser still thinks it wasn't a user gesture
+        playBtn.disabled = false;
+        pauseBtn.disabled = true;
+        hint.textContent = "If it didn’t start, tap Play again (mobile audio policies).";
+      }
+    }
+
+    playBtn.addEventListener('click', () => {
+      playBtn.disabled = true;
+      hint.textContent = "Starting…";
+      startAudio();
+    });
+
+    pauseBtn.addEventListener('click', () => {
+      audio.pause();
+      playBtn.disabled = false;
+      pauseBtn.disabled = true;
+      playBtn.textContent = "▶ Play Music";
+      hint.textContent = "Paused.";
     });
   </script>
-
 </body>
 </html>
